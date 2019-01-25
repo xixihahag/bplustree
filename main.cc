@@ -20,5 +20,11 @@ int main(int argc, char const *argv[])
     setConfig(&config);
     initTree(tree, config.fileName, config.blockSize);
 
+    // 树建好 下面进行搜索
+    int k;
+    printf("please insert key\n");
+    scanf("%d", &k);
+    search(tree, k);
+
     return 0;
 }

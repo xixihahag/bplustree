@@ -14,6 +14,8 @@
 #define offsetPtr(node) ((char *)(node) + sizeof(*node))
 #define key(node) ((int *)offsetPtr(node))
 #define data(node) ((ssize_t *)(offsetPtr(node) + maxEntries_ * sizeof(int)))
+// 这里减1的原因是索引节点偏移指针比存的key多一个
+#define sub(node) ((ssize_t *)(offsetPtr(node) + (maxOrder_ - 1) * sizeof(ssize_t)))
 
 static int blockSize_;
 static int maxEntries_;
