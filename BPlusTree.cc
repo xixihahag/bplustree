@@ -1,6 +1,13 @@
+/*
+ * @file BPlusTree.cc
+ * @brief 
+ * 
+ * @author gyz
+ * @email mni_gyz@163.com
+ */
 #include "BPlusTree.h"
 
-int BPlusTree::setConfig(pBPlusTreeConfig config)
+int BPlusTree::setConfig(pConfig config)
 {
     // 从屏幕中读
     printf("filename:(default /tmp/pbtree)");
@@ -8,7 +15,7 @@ int BPlusTree::setConfig(pBPlusTreeConfig config)
     switch (i = getchar())
     {
     case '\n':
-        strcpy(config->filename, "/tmp/pbtree");
+        strcpy(config->fileName, "/tmp/pbtree");
         break;
     default:
         ungetc(i, stdin);
@@ -36,28 +43,36 @@ int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
     maxOrder_ = (blockSize - sizeof(bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
     maxEntries_ = (blockSize - sizeof(bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
 
-    tree->fileName = fileName;
+    // tree->fileName = fileName;
+    memcpy(tree->fileName, fileName, strlen(fileName));
     tree->root = INVALID_OFFSET; // 初始化根节点
     // 初始化缓冲区
     tree->caches = (char *)malloc(blockSize * MIN_CACHE_NUM);
     // 初始化被删除的空闲块为空
-    tree->freeBlocks->prev = tree->freeBlocks;
-    tree->freeBlocks->next = tree->freeBlocks;
+    tree->freeBlocks.prev = &tree->freeBlocks;
+    tree->freeBlocks.next = &tree->freeBlocks;
 
     // 从文件读命令 进行建树
-    int fd = open(strcat(tree->filename, ".build"), O_RDWR, 0644);
+    int fd = open(strcat(tree->fileName, ".build"), O_RDWR, 0644);
     if (fd > 0)
     {
         tree->fd = fd;
         ssize_t key;
         // FIXME:  这里输入格式有点问题
-        while (fscanf(fd, "%d", &d) != EOF)
-        {
-            insert(tree, key, data);
-        }
+        // 删除部分
+        // while (fscanf(fd, "%d", &data) != EOF)
+        // {
+        //     insert(tree, key, data);
+        //     deleteNode(tree, key);
+        // }
     }
 
     return S_OK;
+}
+
+// 删除主逻辑
+int BPlusTree::deleteNode(pTree tree, int key)
+{
 }
 
 // TODO: 插入主逻辑
@@ -126,12 +141,12 @@ int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
         {
             // 分裂节点 并把新分裂节点key偏移量返回来
             splitKey = leafSplitLeft(tree, node, sibling, key, data, insert);
-            return buildParentNode(tree, sibling, leaf, splitKey);
+            return buildParentNode(tree, sibling, node, splitKey);
         }
         else
         {
             splitKey = leafSplitRight(tree, node, sibling, key, data, insert);
-            return buildParentNode(tree, leaf, sibling, splitKey);
+            return buildParentNode(tree, node, sibling, splitKey);
         }
     }
     else
@@ -181,7 +196,7 @@ int BPlusTree::buildParentNode(pTree tree, pNode left, pNode right, int key)
 
 int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
-    int insert = keyBinarySearch(tree, key);
+    int insert = keyBinarySearch(node, key);
     if (insert < 0)
         return S_FALSE;
 
@@ -211,7 +226,7 @@ int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int
     }
     else
     {
-        noLeafSimpleInsert(tree, node, left, right, insert);
+        noLeafSimpleInsert(tree, node, left, right, key, insert);
         nodeFlush(tree, node);
     }
 
@@ -303,7 +318,7 @@ int BPlusTree::noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pN
     {
         if (i != pivot && i != pivot + 1)
         {
-            subNodeUpdate(tree, left, sub(left)[i]);
+            subNodeFlush(tree, left, sub(left)[i]);
         }
     }
 
@@ -321,16 +336,17 @@ int BPlusTree::noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pN
         subNodeUpdate(tree, left, pivot, lch);
         subNodeUpdate(tree, left, pivot + 1, rch);
         sub(node)[0] = sub(node)[split - 1];
-        splitLey = key(node)[split - 2];
+        splitKey = key(node)[split - 2];
     }
 
-    memmove(&key(node)[0], &key(node)[split - 1], (node->children - 1) * sizeof(int));
-    memmove(&sub(node)[1], &sub(node)[split], (node->children - 1) * sizeof(ssize_t));
+    memmove(&key(node)[0], &key(node)[split - 1], (node->count - 1) * sizeof(int));
+    memmove(&sub(node)[1], &sub(node)[split], (node->count - 1) * sizeof(ssize_t));
 
-    return split_key;
+    int splitkey;
+    return splitkey;
 }
 
-int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int insert)
+int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert)
 {
     memmove(&key(node)[insert + 1], &key(node)[insert], (node->count - insert - 1) * sizeof(int));
     key(node)[insert] = key;
@@ -375,7 +391,7 @@ int BPlusTree::leafSplitLeft(pTree tree, pNode leaf, pNode left, int key, ssize_
     leaf->count = maxEntries_ - split + 1;
 
     memmove(&key(left)[0], &key(leaf)[0], pivot * sizeof(int));
-    memmove(&data(left)]0,&data(leaf)[0],pivot*sizeof(ssize_t));
+    memmove(&data(left)[0], &data(leaf)[0], pivot * sizeof(ssize_t));
 
     key(leaf)[pivot] = key;
     data(leaf)[pivot] = data;
@@ -510,7 +526,7 @@ int BPlusTree::listEmpty(struct listHead *head)
 }
 
 // 从硬盘中把数据读到内存
-int BPlusTree::getNode(pTree tree, ssize_t offset)
+pNode BPlusTree::getNode(pTree tree, ssize_t offset)
 {
     if (offset == INVALID_OFFSET)
         return NULL;
@@ -526,21 +542,21 @@ int BPlusTree::getNode(pTree tree, ssize_t offset)
     }
 }
 
-int BPlusTree::newLeaf(pTree tree)
+pNode BPlusTree::newLeaf(pTree tree)
 {
     pNode node = newNode(tree);
     node->type = BPLUS_TREE_LEAF;
     return node;
 }
 
-int BPlusTree::newNoLeaf(pTree tree)
+pNode BPlusTree::newNoLeaf(pTree tree)
 {
     pNode node = newNode(tree);
     node->type = BPLUS_TREE_NO_LEAF;
     return node;
 }
 
-int BPlusTree::newNode(pTree tree)
+pNode BPlusTree::newNode(pTree tree)
 {
     pNode node = getCache(tree);
     node->self = INVALID_OFFSET;
@@ -565,7 +581,7 @@ pNode BPlusTree::getCache(pTree tree)
 }
 
 // 搜索部分
-int BPlusTree::search(pTree tree, int key)
+ssize_t BPlusTree::search(pTree tree, int key)
 {
     pNode node = getNode(tree, tree->root);
     while (node != NULL)
@@ -573,7 +589,7 @@ int BPlusTree::search(pTree tree, int key)
         int i = keyBinarySearch(node, key);
         if (isLeaf(node))
         {
-            return i > 0 ? data(node)[i] : -1;
+            return (i > 0 ? data(node)[i] : -1);
         }
         else
         {

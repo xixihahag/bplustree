@@ -6,6 +6,11 @@
  * @email mni_gyz@163.com
  */
 #include <sys/types.h>
+#include <stdlib.h>
+#include <cstring>
+#include <cstdio>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define MIN_CACHE_NUM 5
 #define S_OK 1
@@ -46,16 +51,16 @@ typedef struct bPlusNode
     int count;
 } node, *pNode;
 
-typedef struct listHead
+struct listHead
 {
     struct listHead *prev, *next;
-} listHead;
+};
 
-typedef struct freeBlock
+struct freeBlock
 {
     struct listHead link;
     ssize_t offset;
-} freeBlock;
+};
 
 typedef struct bPlusTree
 {
@@ -69,3 +74,38 @@ typedef struct bPlusTree
     struct listHead freeBlocks; // 空闲块链表
 
 } tree, *pTree;
+
+class BPlusTree
+{
+  public:
+    int setConfig(pConfig config);
+    int initTree(pTree tree, char *fileName, int blockSize);
+    int deleteNode(pTree tree, int key);
+    int insert(pTree tree, int key, ssize_t data);
+    int leafInsert(pTree tree, pNode node, int key, ssize_t data);
+    int buildParentNode(pTree tree, pNode left, pNode right, int key);
+    int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key);
+    int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
+    int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
+    int subNodeFlush(pTree tree, pNode parent, ssize_t offset);
+    int noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pNode rch, int key, int insert);
+    int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert);
+    int subNodeUpdate(pTree tree, pNode parent, int insert, pNode child);
+    int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert);
+    int leafSplitLeft(pTree tree, pNode leaf, pNode left, int key, ssize_t data, int insert);
+    int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert);
+    int leftNodeAdd(pTree tree, pNode node, pNode left);
+    int rightNodeAdd(pTree tree, pNode node, pNode right);
+    int isLeaf(pNode node);
+    int nodeFlush(pTree tree, pNode node);
+    int freeCache(pTree tree, pNode node);
+    int append2Tree(pTree tree, pNode node);
+    int listEmpty(struct listHead *head);
+    pNode getNode(pTree tree, ssize_t offset);
+    pNode newLeaf(pTree tree);
+    pNode newNoLeaf(pTree tree);
+    pNode newNode(pTree tree);
+    pNode getCache(pTree tree);
+    ssize_t search(pTree tree, int key);
+    int keyBinarySearch(pNode node, int target);
+};

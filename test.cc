@@ -1,14 +1,18 @@
 #include <cstdio>
 
+typedef struct A
+{
+    int a;
+} mA, *pmA;
+
+pmA getA()
+{
+    struct A a;
+    return &a;
+}
+
 int main(int argc, char const *argv[])
 {
-    char buf[1024];
-    int a;
-    // int n = fscanf(stdin, "%s", buf);
-    // int n = gets(buf);
-    fgets(buf, stdin);
-    printf("%s", buf);
-    // printf("n = %d,buf = \"%s\"\n", n, buf);
-    // printf("a = %d\n", a);
+    struct A *mainA = getA();
     return 0;
 }
