@@ -499,7 +499,7 @@ int BPlusTree::append2Tree(pTree tree, pNode node)
     }
     else
     {
-        // TODO: 放到空闲块中
+        // TODO: 放到空闲块列表中
         struct freeBlock *block;
     }
 }
@@ -571,11 +571,25 @@ int BPlusTree::search(pTree tree, int key)
     while (node != NULL)
     {
         int i = keyBinarySearch(node, key);
+        if (isLeaf(node))
+        {
+            return i > 0 ? data(node)[i] : -1;
+        }
+        else
+        {
+            if (i >= 0)
+            {
+                node = getNode(tree, sub(node)[i + 1]);
+            }
+            else
+            {
+                node = getNode(tree, sub(node)[i]);
+            }
+        }
     }
 }
 
 // 二分搜索
-// TODO: 自己写的，看看会不会有问题
 // 应该返回的值是以0开始的
 // 如果找到的话返回找到的位置
 // 如果未找到的话返回应该插入的位置
