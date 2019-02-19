@@ -73,6 +73,50 @@ int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
 // 删除主逻辑
 int BPlusTree::deleteNode(pTree tree, int key)
 {
+    pNode node = getNode(tree, tree->root);
+    while (node != NULL)
+    {
+        if (isLeaf(node))
+        {
+            return leafRemove(tree, node, key);
+        }
+        else
+        {
+            int i = keyBinarySearch(node, key);
+            if (i >= 0)
+            {
+                node = getNode(tree, sub(node)[i + 1]);
+            }
+            else
+            {
+                i *= -1;
+                node = getNode(tree, sub(node)[i]);
+            }
+        }
+    }
+    return S_FALSE;
+}
+
+int BPlusTree::leafRemove(pTree tree, pNode node, int key)
+{
+    int pos = keyBinarySearch(node, key);
+    if (pos < 0)
+    {
+        return S_FALSE;
+    }
+
+    if (node->parent == INVALID_OFFSET)
+    {
+        if (node->count == 1)
+        {
+            // 剩一个空树
+        }
+        else
+        {
+            leafSimpleRemove(tree, node, pos);
+            nodeFlush(tree, node);
+        }
+    }
 }
 
 // TODO: 插入主逻辑
@@ -599,6 +643,7 @@ ssize_t BPlusTree::search(pTree tree, int key)
             }
             else
             {
+                i *= -1;
                 node = getNode(tree, sub(node)[i]);
             }
         }
