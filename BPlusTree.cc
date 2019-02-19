@@ -50,9 +50,10 @@ int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
     {
         tree->fd = fd;
         ssize_t key;
+        // FIXME:  这里输入格式有点问题
         while (fscanf(fd, "%d", &d) != EOF)
         {
-            insert(tree, key, key);
+            insert(tree, key, data);
         }
     }
 
@@ -100,6 +101,8 @@ int BPlusTree::insert(pTree tree, int key, ssize_t data)
 int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
 {
     int insert = keyBinarySearch(node, key);
+
+    // 限制插入重复节点
     if (insert >= 0)
     {
         // 已经存在
@@ -112,6 +115,7 @@ int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
 
     // getCache(tree);
 
+    // 分裂新节点
     if (node->count == maxEntries_)
     {
         // 从这个点分裂成两个
@@ -132,6 +136,7 @@ int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
     }
     else
     {
+        // 直接插入
         leafSimpleInsert(tree, node, key, data, insert);
         nodeFlush(tree, node);
     }
@@ -177,6 +182,9 @@ int BPlusTree::buildParentNode(pTree tree, pNode left, pNode right, int key)
 int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
     int insert = keyBinarySearch(tree, key);
+    if (insert < 0)
+        return S_FALSE;
+
     insert *= -1;
 
     if (node->count == maxOrder_)
@@ -187,14 +195,18 @@ int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int
         if (insert < split)
         {
             splitKey = noLeafSplitLeft(tree, node, sibling, left, right, key, split);
+            return buildParentNode(tree, sibling, node, splitKey);
         }
         else if (insert == split)
         {
-            splitKey = noLeafSplitLeft();
+            // 非叶子节点分裂和叶子节点分裂不同，所以需要两个
+            splitKey = noLeafSplitRight(tree, node, sibling, left, right, key, split);
+            return buildParentNode(tree, node, sibling, splitKey);
         }
         else
         {
-            splitKey = noLeafSplitLeft();
+            splitKey = noLeafSplitRight1(tree, node, sibling, left, right, key, split);
+            return buildParentNode(tree, node, sibling, splitKey);
         }
     }
     else
@@ -202,6 +214,70 @@ int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int
         noLeafSimpleInsert(tree, node, left, right, insert);
         nodeFlush(tree, node);
     }
+
+    return S_OK;
+}
+
+int BPlusTree::noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert)
+{
+    int split = (maxOrder_ + 1) / 2;
+    rightNodeAdd(tree, node, right);
+    int splitKey = key(node)[split - 1];
+
+    int pivot = 0;
+    node->count = split;
+    right->count = maxOrder_ - split + 1;
+
+    key(right)[0] = key;
+    subNodeUpdate(tree, right, pivot, lch);
+    subNodeUpdate(tree, right, pivot + 1, rch);
+
+    memmove(&key(right)[pivot + 1], &key(node)[split], (right->count - 2) * sizeof(int));
+    memmove(&sub(right)[pivot + 2], &sub(node)[split + 1], (right->count - 2) * sizeof(int));
+
+    for (int i = 2; i < right->count; i++)
+    {
+        subNodeFlush(tree, right, i);
+    }
+
+    return S_OK;
+}
+
+int BPlusTree::noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert)
+{
+    int split = (maxOrder_ + 1) / 2;
+    rightNodeAdd(tree, node, right);
+    int splitKey = key(node)[split];
+
+    int pivot = insert - split - 1;
+    node->count = split + 1;
+    right->count = maxOrder_ - split;
+
+    // 这里key的位置也是split+1是因为split这个位置的key要被提上去
+    memmove(&key(right)[0], &key(node)[split + 1], pivot * sizeof(int));
+    memmove(&sub(right)[0], &sub(node)[split + 1], pivot * sizeof(ssize_t));
+
+    key(right)[pivot] = key;
+
+    memmove(&key(right)[pivot + 1], &key(node)[insert], (maxOrder_ - insert - 1) * sizeof(int));
+    memmove(&sub(right)[pivot + 2], &sub(node)[insert + 1], (maxOrder_ - insert - 1) * sizeof(ssize_t));
+
+    for (int i = 0; i < right->count; i++)
+    {
+        if (i != pivot && i != pivot + 1)
+        {
+            subNodeFlush(tree, right, sub(right)[i]);
+        }
+    }
+
+    return splitKey;
+}
+
+int BPlusTree::subNodeFlush(pTree tree, pNode parent, ssize_t offset)
+{
+    pNode subNode = getNode(tree, offset);
+    subNode->parent = parent->self;
+    nodeFlush(tree, subNode);
 
     return S_OK;
 }
@@ -222,6 +298,36 @@ int BPlusTree::noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pN
 
     memmove(&key(left)[pivot + 1], &key(left)[pivot], (split - pivot - 1) * sizeof(int));
     memmove(&sub(left)[pivot + 1], &sub(left)[pivot], (split - pivot - 1) * sizeof(ssize_t));
+
+    for (int i = 0; i < left->count; i++)
+    {
+        if (i != pivot && i != pivot + 1)
+        {
+            subNodeUpdate(tree, left, sub(left)[i]);
+        }
+    }
+
+    key(left)[pivot] = key;
+
+    if (pivot == split - 1)
+    {
+        // 两个节点一个在左 一个在右
+        subNodeUpdate(tree, left, pivot, lch);
+        subNodeUpdate(tree, node, 0, rch);
+        splitKey = key;
+    }
+    else
+    {
+        subNodeUpdate(tree, left, pivot, lch);
+        subNodeUpdate(tree, left, pivot + 1, rch);
+        sub(node)[0] = sub(node)[split - 1];
+        splitLey = key(node)[split - 2];
+    }
+
+    memmove(&key(node)[0], &key(node)[split - 1], (node->children - 1) * sizeof(int));
+    memmove(&sub(node)[1], &sub(node)[split], (node->children - 1) * sizeof(ssize_t));
+
+    return split_key;
 }
 
 int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int insert)
@@ -315,6 +421,7 @@ int BPlusTree::leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssiz
     return key(right)[0];
 }
 
+// 节点之间建立连接
 int BPlusTree::leftNodeAdd(pTree tree, pNode node, pNode left)
 {
     append2Tree(tree, left);
@@ -467,8 +574,11 @@ int BPlusTree::search(pTree tree, int key)
     }
 }
 
-// 二分搜索 TODO: 自己写的，看看会不会有问题
-// 返回值为负的话是当前节点中没有该元素，其应该插入的位置
+// 二分搜索
+// TODO: 自己写的，看看会不会有问题
+// 应该返回的值是以0开始的
+// 如果找到的话返回找到的位置
+// 如果未找到的话返回应该插入的位置
 int BPlusTree::keyBinarySearch(pNode node, int target)
 {
     int *arr = key(node);
@@ -495,8 +605,6 @@ int BPlusTree::keyBinarySearch(pNode node, int target)
             flag = 1;
         }
     }
-    if (flag)
-        return high < 0 ? high : -high;
-    else
-        return -low;
+
+    return -low;
 }
