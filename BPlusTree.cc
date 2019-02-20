@@ -100,16 +100,20 @@ int BPlusTree::deleteNode(pTree tree, int key)
 int BPlusTree::leafRemove(pTree tree, pNode node, int key)
 {
     int pos = keyBinarySearch(node, key);
+    int half = (maxEntries_ + 1) / 2;
     if (pos < 0)
     {
+        // 尝试删除不存在的节点
         return S_FALSE;
     }
 
-    if (node->parent == INVALID_OFFSET)
+    if (node->parent == NULL)
     {
         if (node->count == 1)
         {
-            // 剩一个空树
+            tree->root = INVALID_OFFSET;
+            tree->level = 0;
+            nodeDelete(tree, node, NULL, NULL);
         }
         else
         {
@@ -117,6 +121,177 @@ int BPlusTree::leafRemove(pTree tree, pNode node, int key)
             nodeFlush(tree, node);
         }
     }
+    else if (node->count <= half)
+    {
+        leafSimpleRemove(tree, node, pos);
+        if (findSiblingNode(node))
+        {
+            // 借一个节点过来-处理双亲节点-结束
+            int preKey = key(node)[0];
+            int newKey;
+
+            // 右移 空出第一个位置
+            memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
+            memmove(&data(node)[1], &data(node)[0], node->count * sizeof(ssize_t));
+
+            // 把兄弟节点的关键字拿过来
+            pNode sibling = getNode(tree, node->prev);
+            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
+            memmove(&data(node)[0], &data(sibling)[sibling->count - 1], sizeof(ssize_t));
+
+            // 处理双亲节点的问题
+            newKey = key(node)[0];
+            noLeafReplace(tree, node->parent, preKey, newKey);
+
+            // 数据写回硬盘
+            nodeFlush(tree, node);
+            nodeFlush(tree, sibling);
+        }
+        else
+        {
+            // 与兄弟节点合并-处理双亲节点-视情况结束
+            int preK = key(node)[0];
+            pNode sibling = getNode(tree, node->prev);
+
+            // 合并到兄弟节点
+            memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
+            memmove(&data(sibling)[sibling->count], &data(node)[0], node->count * sizeof(ssize_t));
+
+            nodeDelete(tree, node, NULL, NULL);
+
+            // 处理双亲节点
+            noLeafRemove(tree, node->parent, preK);
+        }
+    }
+    else
+    {
+        leafSimpleRemove(tree, node, pos);
+        nodeFlush(tree, node);
+    }
+}
+
+int BPlusTree::noLeafRemove(pTree tree, pNode node, int key)
+{
+    int pos = keyBinarySearch(node, key);
+    int half = (node->count + 1) / 2;
+
+    if (node->parent == NULL)
+    {
+        if (node->count == 2)
+        {
+            pNode root = getNode(tree, sub(node)[0]);
+            root->parent = NULL;
+            tree->root = root;
+            tree->level--;
+            nodeDelete(tree, node, NULL, NULL);
+            nodeFlush(tree, node);
+        }
+        else
+        {
+            noLeafSimpleRemove(tree, node, key);
+            nodeFlush(tree, node);
+        }
+    }
+    else if (node->count <= half)
+    {
+        noleafSimpleRemove(tree, node, pos);
+        if (findSiblingNode(node->prev))
+        {
+            // 向兄弟节点借关键字-解决父母节点的问题
+            int preK = key(node)[0];
+            int newK;
+
+            memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
+            memmove(&sub(node)[1], &sub(node)[0], node->count * sizeof(ssize_t));
+
+            // FIXME: 两次get同一个node 会不会出问题
+            pNode sibling = getNode(node->prev);
+            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
+            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(ssize_t));
+
+            // TODO: 处理父母节点的问题
+            newK = key(node)[0];
+            noLeafReplace(tree, node->parent, preK, newK);
+
+            nodeFlush(tree, node);
+            nodeFlush(tree, sibling);
+        }
+        else
+        {
+            // 拉父母节点的关键字下来合并
+            int posi = keyBinarySearch(node->parent, key);
+            if (posi < 0)
+            {
+                posi *= -1;
+                posi--;
+            }
+
+            pNode sibling = getNode(tree, node->prev);
+            pNode parent = getNode(tree, node->parent);
+
+            // 把父母节点的关键字拉下来
+            memmove(&key(sibling)[sibling->count - 1], &key(parent)[posi], sizeof(int));
+
+            // 合并兄弟节点
+            memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
+            memmove(&sub(sibling)[sibling->count], &sub(node)[0], node->count * sizeof(int));
+
+            // 维护双亲节点
+            noLeafRemove(tree, parent, posi);
+        }
+    }
+    else
+    {
+        noLeafSimpleRemove(tree, node, key);
+        nodeFlush(tree, node);
+    }
+}
+
+int BPlusTree::noLeafSimpleRemove(pTree tree, pNode node, int pos)
+{
+    memmove(&key(node)[pos], &key(node)[pos + 1], (node->count - pos - 2) * sizeof(int));
+    memmove(&sub(node)[pos], &sub(node)[pos + 1], (node->count - pos - 1) * sizeof(ssize_t));
+    node->count--;
+
+    return S_OK;
+}
+
+int BPlusTree::noLeafReplace(pTree tree, pNode parent, int preK, int newK)
+{
+    pNode node = getNode(tree, parent);
+    int pos = keyBinarySearch(node, preK);
+    if (pos < 0)
+        return S_FALSE;
+
+    key(node)[pos] = newK;
+
+    nodeFlush(tree, node);
+    freeCache(tree, node);
+    return S_OK;
+}
+
+// 查找兄弟节点是否有多余关键字
+bool BPlusTree::findSiblingNode(pNode node)
+{
+    if (node == NULL)
+        return false;
+    pNode leftNode = getNode(node->prev);
+    if (leftNode->count > ((maxEntries_ + 1) / 2))
+        return true;
+    return false;
+}
+
+int BPlusTree::nodeDelete(pTree tree, pNode node, pNode lch, pNode rch)
+{
+}
+
+int BPlusTree::leafSimpleRemove(pTree tree, pNode node, int pos)
+{
+    memmove(&key(node)[remove], &key(node)[remove + 1], (node->count - pos - 1) * sizeof(int));
+    memmove(&data(node)[remove], &data(node)[remove + 1], (node->count - pos - 1) * sizeof(ssize_t));
+    node->count--;
+
+    return S_OK;
 }
 
 // TODO: 插入主逻辑
@@ -404,6 +579,7 @@ int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode righ
     return S_OK;
 }
 
+// 先建立父子关系，再写到硬盘上
 int BPlusTree::subNodeUpdate(pTree tree, pNode parent, int insert, pNode child)
 {
     sub(parent)[insert] = child->self;
@@ -654,6 +830,7 @@ ssize_t BPlusTree::search(pTree tree, int key)
 // 应该返回的值是以0开始的
 // 如果找到的话返回找到的位置
 // 如果未找到的话返回应该插入的位置
+// FIXME: 有bug，返回值是0的时候 无法区分是不是找到了
 int BPlusTree::keyBinarySearch(pNode node, int target)
 {
     int *arr = key(node);

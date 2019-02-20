@@ -15,7 +15,7 @@
 #define MIN_CACHE_NUM 5
 #define S_OK 1
 #define S_FALSE -1
-#define INVALID_OFFSET -1
+#define INVALID_OFFSET NULL
 #define offsetPtr(node) ((char *)(node) + sizeof(*node))
 #define key(node) ((int *)offsetPtr(node))
 #define data(node) ((ssize_t *)(offsetPtr(node) + maxEntries_ * sizeof(int)))
@@ -41,13 +41,13 @@ typedef struct bPlusTreeConfig
 typedef struct bPlusNode
 {
     ssize_t self;   // 自己在tree中的偏移量
-    ssize_t parent; //父母的偏移量
-    ssize_t prev;   //叶子节点的时候 指向上一个叶子节点
+    ssize_t parent; // 父母的节点的偏移
+    ssize_t prev;   // 叶子节点的时候 指向上一个叶子节点
     ssize_t next;   // 叶子节点的时候 指向下一个叶子节点
-    int type;       //表明是叶子还是索引
+    int type;       // 表明是叶子还是索引
 
-    //叶子节点的话就是当前元素数目
-    //索引节点的话就是孩子数量
+    // 叶子节点的话就是当前元素数目
+    // 索引节点的话就是孩子数量
     int count;
 } node, *pNode;
 
@@ -69,10 +69,9 @@ typedef struct bPlusTree
     char fileName[1024];        // 文件名称
     int fd;                     // 文件描述符
     int level;                  // 一共有几层
-    ssize_t root;               // 根节点便宜
+    ssize_t root;               // 根节点偏移
     ssize_t fileSize;           // 文件大小
     struct listHead freeBlocks; // 空闲块链表
-
 } tree, *pTree;
 
 class BPlusTree
@@ -108,4 +107,14 @@ class BPlusTree
     pNode getCache(pTree tree);
     ssize_t search(pTree tree, int key);
     int keyBinarySearch(pNode node, int target);
+
+    // 删除
+    int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch);
+    int leafSimpleRemove(pTree tree, pNode node, int pos);
+    int leafRemove(pTree tree, pNode node, int key);
+
+    int noLeafRemove(pTree tree, pNode node, int key);
+    int noLeafSimpleRemove(pTree tree, pNode node, int pos);
+    bool findSiblingNode(pNode node);
+    int noLeafReplace(pTree tree, pNode node, int preK, int newK);
 };
