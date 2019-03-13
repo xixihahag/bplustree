@@ -15,7 +15,7 @@
 #define MIN_CACHE_NUM 5
 #define S_OK 1
 #define S_FALSE -1
-#define INVALID_OFFSET NULL
+#define INVALID_OFFSET -1
 #define offsetPtr(node) ((char *)(node) + sizeof(*node))
 #define key(node) ((int *)offsetPtr(node))
 #define data(node) ((ssize_t *)(offsetPtr(node) + maxEntries_ * sizeof(int)))
@@ -98,7 +98,7 @@ class BPlusTree
     int isLeaf(pNode node);
     int nodeFlush(pTree tree, pNode node);
     int freeCache(pTree tree, pNode node);
-    int append2Tree(pTree tree, pNode node);
+    ssize_t append2Tree(pTree tree, pNode node);
     int listEmpty(struct listHead *head);
     pNode getNode(pTree tree, ssize_t offset);
     pNode newLeaf(pTree tree);
@@ -116,5 +116,5 @@ class BPlusTree
     int noLeafRemove(pTree tree, pNode node, int key);
     int noLeafSimpleRemove(pTree tree, pNode node, int pos);
     bool findSiblingNode(pNode node);
-    int noLeafReplace(pTree tree, pNode node, int preK, int newK);
+    int noLeafReplace(pTree tree, ssize_t node, int preK, int newK);
 };

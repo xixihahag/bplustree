@@ -48,7 +48,7 @@ int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
     tree->root = INVALID_OFFSET; // 初始化根节点
     // 初始化缓冲区
     tree->caches = (char *)malloc(blockSize * MIN_CACHE_NUM);
-    // 初始化被删除的空闲块为空
+    // 初始化空闲块链表为空
     tree->freeBlocks.prev = &tree->freeBlocks;
     tree->freeBlocks.next = &tree->freeBlocks;
 
@@ -107,7 +107,7 @@ int BPlusTree::leafRemove(pTree tree, pNode node, int key)
         return S_FALSE;
     }
 
-    if (node->parent == NULL)
+    if (node->parent == INVALID_OFFSET)
     {
         if (node->count == 1)
         {
@@ -256,7 +256,7 @@ int BPlusTree::noLeafSimpleRemove(pTree tree, pNode node, int pos)
     return S_OK;
 }
 
-int BPlusTree::noLeafReplace(pTree tree, pNode parent, int preK, int newK)
+int BPlusTree::noLeafReplace(pTree tree, ssize_t parent, int preK, int newK)
 {
     pNode node = getNode(tree, parent);
     int pos = keyBinarySearch(node, preK);
@@ -313,7 +313,8 @@ int BPlusTree::insert(pTree tree, int key, ssize_t data)
             }
             else
             {
-                i = -i;
+                i += 1;
+                i *= -1;
                 node = getNode(tree, sub(node)[i]);
             }
         }
@@ -344,10 +345,9 @@ int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
     }
 
     // 应该插入的位置
+    insert += 1;
     insert *= -1;
     int splitKey;
-
-    // getCache(tree);
 
     // 分裂新节点
     if (node->count == maxEntries_)
@@ -413,6 +413,7 @@ int BPlusTree::buildParentNode(pTree tree, pNode left, pNode right, int key)
     }
 }
 
+// TODO: 待理解
 int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
     int insert = keyBinarySearch(node, key);
@@ -657,7 +658,7 @@ int BPlusTree::leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssiz
     return key(right)[0];
 }
 
-// 节点之间建立连接
+// 把左侧新new的节点融入这颗树
 int BPlusTree::leftNodeAdd(pTree tree, pNode node, pNode left)
 {
     append2Tree(tree, left);
@@ -726,7 +727,7 @@ int BPlusTree::freeCache(pTree tree, pNode node)
     return S_OK;
 }
 
-int BPlusTree::append2Tree(pTree tree, pNode node)
+ssize_t BPlusTree::append2Tree(pTree tree, pNode node)
 {
     if (listEmpty(&tree->freeBlocks))
     {
@@ -738,6 +739,8 @@ int BPlusTree::append2Tree(pTree tree, pNode node)
         // TODO: 放到空闲块列表中
         struct freeBlock *block;
     }
+
+    return node->self;
 }
 
 int BPlusTree::listEmpty(struct listHead *head)
@@ -830,7 +833,6 @@ ssize_t BPlusTree::search(pTree tree, int key)
 // 应该返回的值是以0开始的
 // 如果找到的话返回找到的位置
 // 如果未找到的话返回应该插入的位置
-// FIXME: 有bug，返回值是0的时候 无法区分是不是找到了
 int BPlusTree::keyBinarySearch(pNode node, int target)
 {
     int *arr = key(node);
@@ -858,5 +860,5 @@ int BPlusTree::keyBinarySearch(pNode node, int target)
         }
     }
 
-    return -low;
+    return -low - 1;
 }
