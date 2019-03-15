@@ -11,20 +11,20 @@
 
 #include "BPlusTree.h"
 
-int main(int argc, char const *argv[])
+int main()
 {
-    struct config config;
-    pTree tree = calloc(1, sizeof(*tree));
+    config mConfig;
+    pTree tree = (pTree)calloc(1, sizeof(tree));
 
     // 输入文件名称 block大小
-    setConfig(&config);
-    initTree(tree, config.fileName, config.blockSize);
+    // setConfig(&mConfig);
+    // initTree(tree, mConfig.fileName, mConfig.blockSize);
 
     // 树建好 下面进行搜索
     int k;
     printf("please insert key\n");
     scanf("%d", &k);
-    search(tree, k);
+    // search(tree, k);
 
     return 0;
 }

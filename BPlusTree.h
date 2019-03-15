@@ -26,6 +26,10 @@ static int blockSize_;
 static int maxEntries_;
 static int maxOrder_;
 
+// TODO: 初始化中填充
+static int LEAFSIZE_;
+static int NOLEAFSIZE_;
+
 enum
 {
     BPLUS_TREE_LEAF,
@@ -74,47 +78,44 @@ typedef struct bPlusTree
     struct listHead freeBlocks; // 空闲块链表
 } tree, *pTree;
 
-class BPlusTree
-{
-  public:
-    int setConfig(pConfig config);
-    int initTree(pTree tree, char *fileName, int blockSize);
-    int deleteNode(pTree tree, int key);
-    int insert(pTree tree, int key, ssize_t data);
-    int leafInsert(pTree tree, pNode node, int key, ssize_t data);
-    int buildParentNode(pTree tree, pNode left, pNode right, int key);
-    int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key);
-    int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
-    int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
-    int subNodeFlush(pTree tree, pNode parent, ssize_t offset);
-    int noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pNode rch, int key, int insert);
-    int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert);
-    int subNodeUpdate(pTree tree, pNode parent, int insert, pNode child);
-    int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert);
-    int leafSplitLeft(pTree tree, pNode leaf, pNode left, int key, ssize_t data, int insert);
-    int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert);
-    int leftNodeAdd(pTree tree, pNode node, pNode left);
-    int rightNodeAdd(pTree tree, pNode node, pNode right);
-    int isLeaf(pNode node);
-    int nodeFlush(pTree tree, pNode node);
-    int freeCache(pTree tree, pNode node);
-    ssize_t append2Tree(pTree tree, pNode node);
-    int listEmpty(struct listHead *head);
-    pNode getNode(pTree tree, ssize_t offset);
-    pNode newLeaf(pTree tree);
-    pNode newNoLeaf(pTree tree);
-    pNode newNode(pTree tree);
-    pNode getCache(pTree tree);
-    ssize_t search(pTree tree, int key);
-    int keyBinarySearch(pNode node, int target);
+// 函数声明
+static int setConfig(pConfig config);
+static int initTree(pTree tree, char *fileName, int blockSize);
+static int deleteNode(pTree tree, int key);
+static int insert(pTree tree, int key, ssize_t data);
+static int leafInsert(pTree tree, pNode node, int key, ssize_t data);
+static int buildParentNode(pTree tree, pNode left, pNode right, int key);
+static int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key);
+static int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
+static int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert);
+static int subNodeFlush(pTree tree, pNode parent, ssize_t offset);
+static int noLeafSplitLeft(pTree tree, pNode node, pNode left, pNode lch, pNode rch, int key, int insert);
+static int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert);
+static int subNodeUpdate(pTree tree, pNode parent, int insert, pNode child);
+static int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert);
+static int leafSplitLeft(pTree tree, pNode leaf, pNode left, int key, ssize_t data, int insert);
+static int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert);
+static int leftNodeAdd(pTree tree, pNode node, pNode left);
+static int rightNodeAdd(pTree tree, pNode node, pNode right);
+static int isLeaf(pNode node);
+static int nodeFlush(pTree tree, pNode node);
+static int freeCache(pTree tree, pNode node);
+static ssize_t append2Tree(pTree tree, pNode node);
+static int listEmpty(struct listHead *head);
+static pNode getNode(pTree tree, ssize_t offset);
+static pNode newLeaf(pTree tree);
+static pNode newNoLeaf(pTree tree);
+static pNode newNode(pTree tree);
+static pNode getCache(pTree tree);
+static ssize_t search(pTree tree, int key);
+static int keyBinarySearch(pNode node, int target);
 
-    // 删除
-    int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch);
-    int leafSimpleRemove(pTree tree, pNode node, int pos);
-    int leafRemove(pTree tree, pNode node, int key);
+// 删除
+static int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch);
+// static int leafSimpleRemove(pTree tree, pNode node, int pos);
+static int leafRemove(pTree tree, pNode node, int key);
 
-    int noLeafRemove(pTree tree, pNode node, int key);
-    int noLeafSimpleRemove(pTree tree, pNode node, int pos);
-    bool findSiblingNode(pNode node);
-    int noLeafReplace(pTree tree, ssize_t node, int preK, int newK);
-};
+// static int noLeafRemove(pTree tree, pNode node, int key);
+static int noLeafSimpleRemove(pTree tree, pNode node, int pos);
+static bool findSiblingNode(pTree tree, pNode node);
+static int noLeafReplace(pTree tree, ssize_t node, int preK, int newK);

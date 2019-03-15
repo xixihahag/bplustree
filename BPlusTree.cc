@@ -7,7 +7,7 @@
  */
 #include "BPlusTree.h"
 
-int BPlusTree::setConfig(pConfig config)
+int setConfig(pConfig config)
 {
     // 从屏幕中读
     printf("filename:(default /tmp/pbtree)");
@@ -36,7 +36,7 @@ int BPlusTree::setConfig(pConfig config)
     return S_OK;
 }
 
-int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
+int initTree(pTree tree, char *fileName, int blockSize)
 {
     blockSize_ = blockSize;
     // 这两个暂时设置成一样的，默认存的是数字
@@ -71,7 +71,7 @@ int BPlusTree::initTree(pTree tree, char *fileName, int blockSize)
 }
 
 // 删除主逻辑
-int BPlusTree::deleteNode(pTree tree, int key)
+int deleteNode(pTree tree, int key)
 {
     pNode node = getNode(tree, tree->root);
     while (node != NULL)
@@ -97,7 +97,7 @@ int BPlusTree::deleteNode(pTree tree, int key)
     return S_FALSE;
 }
 
-int BPlusTree::leafRemove(pTree tree, pNode node, int key)
+int leafRemove(pTree tree, pNode node, int key)
 {
     int pos = keyBinarySearch(node, key);
     int half = (maxEntries_ + 1) / 2;
@@ -117,14 +117,14 @@ int BPlusTree::leafRemove(pTree tree, pNode node, int key)
         }
         else
         {
-            leafSimpleRemove(tree, node, pos);
+            // leafSimpleRemove(tree, node, pos);
             nodeFlush(tree, node);
         }
     }
     else if (node->count <= half)
     {
-        leafSimpleRemove(tree, node, pos);
-        if (findSiblingNode(node))
+        // leafSimpleRemove(tree, node, pos);
+        if (findSiblingNode(tree, node))
         {
             // 借一个节点过来-处理双亲节点-结束
             int preKey = key(node)[0];
@@ -160,94 +160,94 @@ int BPlusTree::leafRemove(pTree tree, pNode node, int key)
             nodeDelete(tree, node, NULL, NULL);
 
             // 处理双亲节点
-            noLeafRemove(tree, node->parent, preK);
+            // noLeafRemove(tree, getNode(tree, node->parent), preK);
         }
     }
     else
     {
-        leafSimpleRemove(tree, node, pos);
+        // leafSimpleRemove(tree, node, pos);
         nodeFlush(tree, node);
     }
 }
 
-int BPlusTree::noLeafRemove(pTree tree, pNode node, int key)
-{
-    int pos = keyBinarySearch(node, key);
-    int half = (node->count + 1) / 2;
+//   int  noLeafRemove(pTree tree, pNode node, int key)
+// {
+//     int pos = keyBinarySearch(node, key);
+//     int half = (node->count + 1) / 2;
 
-    if (node->parent == NULL)
-    {
-        if (node->count == 2)
-        {
-            pNode root = getNode(tree, sub(node)[0]);
-            root->parent = NULL;
-            tree->root = root;
-            tree->level--;
-            nodeDelete(tree, node, NULL, NULL);
-            nodeFlush(tree, node);
-        }
-        else
-        {
-            noLeafSimpleRemove(tree, node, key);
-            nodeFlush(tree, node);
-        }
-    }
-    else if (node->count <= half)
-    {
-        noleafSimpleRemove(tree, node, pos);
-        if (findSiblingNode(node->prev))
-        {
-            // 向兄弟节点借关键字-解决父母节点的问题
-            int preK = key(node)[0];
-            int newK;
+//     if (node->parent == INVALID_OFFSET)
+//     {
+//         if (node->count == 2)
+//         {
+//             pNode root = getNode(tree, sub(node)[0]);
+//             root->parent = INVALID_OFFSET;
+//             tree->root = root->self;
+//             tree->level--;
+//             nodeDelete(tree, node, INVALID_OFFSET, INVALID_OFFSET);
+//             nodeFlush(tree, node);
+//         }
+//         else
+//         {
+//             noLeafSimpleRemove(tree, node, key);
+//             nodeFlush(tree, node);
+//         }
+//     }
+//     else if (node->count <= half)
+//     {
+//         // noleafSimpleRemove(tree, node, pos);
+//         if (findSiblingNode(getNode(tree,node->prev))
+//         {
+//             // 向兄弟节点借关键字-解决父母节点的问题
+//             int preK = key(node)[0];
+//             int newK;
 
-            memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
-            memmove(&sub(node)[1], &sub(node)[0], node->count * sizeof(ssize_t));
+//             memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
+//             memmove(&sub(node)[1], &sub(node)[0], node->count * sizeof(ssize_t));
 
-            // FIXME: 两次get同一个node 会不会出问题
-            pNode sibling = getNode(node->prev);
-            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
-            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(ssize_t));
+//             // FIXME: 两次get同一个node 会不会出问题
+//             pNode sibling = getNode(tree, node->prev);
+//             memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
+//             memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(ssize_t));
 
-            // TODO: 处理父母节点的问题
-            newK = key(node)[0];
-            noLeafReplace(tree, node->parent, preK, newK);
+//             // TODO: 处理父母节点的问题
+//             newK = key(node)[0];
+//             noLeafReplace(tree, node->parent, preK, newK);
 
-            nodeFlush(tree, node);
-            nodeFlush(tree, sibling);
-        }
-        else
-        {
-            // 拉父母节点的关键字下来合并
-            int posi = keyBinarySearch(node->parent, key);
-            if (posi < 0)
-            {
-                posi *= -1;
-                posi--;
-            }
+//             nodeFlush(tree, node);
+//             nodeFlush(tree, sibling);
+//         }
+//         else
+//         {
+//             // 拉父母节点的关键字下来合并
+//             int posi = keyBinarySearch(node->parent, key);
+//             if (posi < 0)
+//             {
+//                 posi *= -1;
+//                 posi--;
+//             }
 
-            pNode sibling = getNode(tree, node->prev);
-            pNode parent = getNode(tree, node->parent);
+//             pNode sibling = getNode(tree, node->prev);
+//             pNode parent = getNode(tree, node->parent);
 
-            // 把父母节点的关键字拉下来
-            memmove(&key(sibling)[sibling->count - 1], &key(parent)[posi], sizeof(int));
+//             // 把父母节点的关键字拉下来
+//             memmove(&key(sibling)[sibling->count - 1], &key(parent)[posi], sizeof(int));
 
-            // 合并兄弟节点
-            memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
-            memmove(&sub(sibling)[sibling->count], &sub(node)[0], node->count * sizeof(int));
+//             // 合并兄弟节点
+//             memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
+//             memmove(&sub(sibling)[sibling->count], &sub(node)[0], node->count * sizeof(int));
 
-            // 维护双亲节点
-            noLeafRemove(tree, parent, posi);
-        }
-    }
-    else
-    {
-        noLeafSimpleRemove(tree, node, key);
-        nodeFlush(tree, node);
-    }
-}
+//             // 维护双亲节点
+//             noLeafRemove(tree, parent, posi);
+//         }
+//     }
+//     else
+//     {
+//         // noLeafSimpleRemove(tree, node, key);
+//         nodeFlush(tree, node);
+//     }
+// }
 
-int BPlusTree::noLeafSimpleRemove(pTree tree, pNode node, int pos)
+int noLeafSimpleRemove(pTree tree, pNode node, int pos)
 {
     memmove(&key(node)[pos], &key(node)[pos + 1], (node->count - pos - 2) * sizeof(int));
     memmove(&sub(node)[pos], &sub(node)[pos + 1], (node->count - pos - 1) * sizeof(ssize_t));
@@ -256,7 +256,7 @@ int BPlusTree::noLeafSimpleRemove(pTree tree, pNode node, int pos)
     return S_OK;
 }
 
-int BPlusTree::noLeafReplace(pTree tree, ssize_t parent, int preK, int newK)
+int noLeafReplace(pTree tree, ssize_t parent, int preK, int newK)
 {
     pNode node = getNode(tree, parent);
     int pos = keyBinarySearch(node, preK);
@@ -271,34 +271,35 @@ int BPlusTree::noLeafReplace(pTree tree, ssize_t parent, int preK, int newK)
 }
 
 // 查找兄弟节点是否有多余关键字
-bool BPlusTree::findSiblingNode(pNode node)
+bool findSiblingNode(pTree tree, pNode node)
 {
     if (node == NULL)
         return false;
-    pNode leftNode = getNode(node->prev);
+    pNode leftNode = getNode(tree, node->prev);
     if (leftNode->count > ((maxEntries_ + 1) / 2))
         return true;
     return false;
 }
 
-int BPlusTree::nodeDelete(pTree tree, pNode node, pNode lch, pNode rch)
+int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch)
 {
 }
 
-int BPlusTree::leafSimpleRemove(pTree tree, pNode node, int pos)
-{
-    memmove(&key(node)[remove], &key(node)[remove + 1], (node->count - pos - 1) * sizeof(int));
-    memmove(&data(node)[remove], &data(node)[remove + 1], (node->count - pos - 1) * sizeof(ssize_t));
-    node->count--;
+// int  leafSimpleRemove(pTree tree, pNode node, int pos)
+// {
+//     memmove(&key(node)[remove], &key(node)[remove + 1], (node->count - pos - 1) * sizeof(int));
+//     memmove(&data(node)[remove], &data(node)[remove + 1], (node->count - pos - 1) * sizeof(ssize_t));
+//     node->count--;
 
-    return S_OK;
-}
+//     return S_OK;
+// }
 
 // TODO: 插入主逻辑
-int BPlusTree::insert(pTree tree, int key, ssize_t data)
+int insert(pTree tree, int key, ssize_t data)
 {
     pNode node = getNode(tree, tree->root);
-    if (NULL != node)
+    pNode oldNode;
+    while (NULL != node)
     {
         if (isLeaf(node))
         {
@@ -307,6 +308,7 @@ int BPlusTree::insert(pTree tree, int key, ssize_t data)
         else
         {
             int i = keyBinarySearch(node, key);
+            oldNode = node;
             if (i >= 0)
             {
                 node = getNode(tree, sub(node)[i + 1]);
@@ -318,6 +320,7 @@ int BPlusTree::insert(pTree tree, int key, ssize_t data)
                 node = getNode(tree, sub(node)[i]);
             }
         }
+        freeCache(tree, oldNode);
     }
 
     // 新节点加入
@@ -333,14 +336,13 @@ int BPlusTree::insert(pTree tree, int key, ssize_t data)
     return S_OK;
 }
 
-int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
+int leafInsert(pTree tree, pNode node, int key, ssize_t data)
 {
     int insert = keyBinarySearch(node, key);
 
     // 限制插入重复节点
     if (insert >= 0)
     {
-        // 已经存在
         return S_FALSE;
     }
 
@@ -377,7 +379,7 @@ int BPlusTree::leafInsert(pTree tree, pNode node, int key, ssize_t data)
     }
 }
 
-int BPlusTree::buildParentNode(pTree tree, pNode left, pNode right, int key)
+int buildParentNode(pTree tree, pNode left, pNode right, int key)
 {
     // 左面和右面新加节点的情况统一在一起了 所以要单独判断左右的节点是否有parent
     if (left->parent == INVALID_OFFSET && right->parent == INVALID_OFFSET)
@@ -404,17 +406,13 @@ int BPlusTree::buildParentNode(pTree tree, pNode left, pNode right, int key)
 
         return S_OK;
     }
-    // else if (left->parent == INVALID_OFFSET)
-    // {
-    //     return noLeafInsert(tree, getNode(tree, right->parent), left, right, key);
-    // }
     else if (right->parent == INVALID_OFFSET)
     {
         return noLeafInsert(tree, getNode(tree, left->parent), left, right, key);
     }
 }
 
-int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
+int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
     int insert = keyBinarySearch(node, key);
     insert += 1;
@@ -428,13 +426,10 @@ int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int
         if (insert < split)
         {
             splitKey = noLeafSplitLeft(tree, node, sibling, left, right, key, split);
-            // return buildParentNode(tree, sibling, node, splitKey);
         }
         else if (insert == split)
         {
-            // 非叶子节点分裂和叶子节点分裂不同，所以需要两个
             splitKey = noLeafSplitRight(tree, node, sibling, left, right, key, split);
-            // return buildParentNode(tree, node, sibling, splitKey);
         }
         else
         {
@@ -451,62 +446,63 @@ int BPlusTree::noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int
     return S_OK;
 }
 
-int BPlusTree::noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert)
+int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
-    int split = (maxOrder_ + 1) / 2;
     rightNodeAdd(tree, node, right);
-    int splitKey = key(node)[split - 1];
+    // int splitKey = key(node)[split - 1];
 
-    int pivot = 0;
+    // int pivot = 0;
     node->count = split;
-    right->count = maxOrder_ - split + 1;
+    right->count = maxOrder_ - split;
 
-    key(right)[0] = key;
-    subNodeUpdate(tree, right, pivot, lch);
-    subNodeUpdate(tree, right, pivot + 1, rch);
+    memmove(&key(right)[0], &key(node)[split], (right->count) * sizeof(int));
+    memmove(&sub(node)[1], &key(node)[split + 1], (right->count) * sizeof(ssize_t));
 
-    memmove(&key(right)[pivot + 1], &key(node)[split], (right->count - 2) * sizeof(int));
-    memmove(&sub(right)[pivot + 2], &sub(node)[split + 1], (right->count - 2) * sizeof(int));
+    subNodeUpdate(tree, node, 0, rch);
 
-    for (int i = 2; i < right->count; i++)
+    for (int i = 1; i < right->count; i++)
     {
         subNodeFlush(tree, right, i);
     }
 
-    return S_OK;
+    nodeFlush(tree, lch);
+
+    return key;
 }
 
-int BPlusTree::noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int insert)
+int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
-    int split = (maxOrder_ + 1) / 2;
+    // int split = (maxOrder_ + 1) / 2;
     rightNodeAdd(tree, node, right);
     int splitKey = key(node)[split];
+    int insert = keyBinarySearch(node, key);
 
     int pivot = insert - split - 1;
-    node->count = split + 1;
+    node->count = split;
     right->count = maxOrder_ - split;
 
-    // 这里key的位置也是split+1是因为split这个位置的key要被提上去
     memmove(&key(right)[0], &key(node)[split + 1], pivot * sizeof(int));
-    memmove(&sub(right)[0], &sub(node)[split + 1], pivot * sizeof(ssize_t));
+    memmove(&sub(right)[0], &sub(node)[split + 1], (pivot + 1) * sizeof(ssize_t));
 
     key(right)[pivot] = key;
 
     memmove(&key(right)[pivot + 1], &key(node)[insert], (maxOrder_ - insert - 1) * sizeof(int));
     memmove(&sub(right)[pivot + 2], &sub(node)[insert + 1], (maxOrder_ - insert - 1) * sizeof(ssize_t));
 
+    subNodeUpdate(tree, right, pivot + 1, right);
+
     for (int i = 0; i < right->count; i++)
     {
-        if (i != pivot && i != pivot + 1)
-        {
-            subNodeFlush(tree, right, sub(right)[i]);
-        }
+        if (i != (pivot + 1))
+            subNodeFlush(tree, right, i);
     }
+
+    nodeFlush(tree, lch);
 
     return splitKey;
 }
 
-int BPlusTree::subNodeFlush(pTree tree, pNode parent, ssize_t offset)
+int subNodeFlush(pTree tree, pNode parent, ssize_t offset)
 {
     pNode subNode = getNode(tree, offset);
     subNode->parent = parent->self;
@@ -515,28 +511,23 @@ int BPlusTree::subNodeFlush(pTree tree, pNode parent, ssize_t offset)
     return S_OK;
 }
 
-int BPlusTree::noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
+int noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
-    int splitKey;
-
     rightNodeAdd(tree, node, right);
-    // leftNodeAdd(tree, node, left);
 
-    // int pivot = insert;
     int insert = keyBinarySearch(node, key);
-    // left->count = split;
+    int splitKey = key(node)[split - 1];
     node->count = split;
     right->count = maxOrder_ - split;
-    splitKey = key(leaf)[split - 1];
 
     memmove(&key(right)[0], &key(node)[split], (right->count) * sizeof(int));
-    memmove(&data(right)[0], &data(node)[split], ((right->count) + 1) * sizeof(ssize_t));
+    memmove(&sub(right)[0], &sub(node)[split], ((right->count) + 1) * sizeof(ssize_t));
 
     memmove(&key(node)[insert + 1], &key(node)[insert], (split - insert - 1) * sizeof(int));
-    memmove(&data(node)[insert + 2], &data(node)[insert], (split - insert - 1) * sizeof(ssize_t));
+    memmove(&sub(node)[insert + 2], &sub(node)[insert + 1], (split - insert - 1) * sizeof(ssize_t));
 
     key(node)[insert] = key;
-    data(node)[insert + 1] = data;
+    subNodeUpdate(tree, node, insert + 1, rch);
 
     //更新子节点
     for (int i = 0; i < right->count; i++)
@@ -544,11 +535,12 @@ int BPlusTree::noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, p
         subNodeFlush(tree, right, sub(right)[i]);
     }
 
-    // int splitkey;
-    return splitkey;
+    nodeFlush(tree, lch);
+
+    return splitKey;
 }
 
-int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert)
+int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert)
 {
     memmove(&key(node)[insert + 1], &key(node)[insert], (node->count - insert - 1) * sizeof(int));
     key(node)[insert] = key;
@@ -563,7 +555,7 @@ int BPlusTree::noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode righ
 }
 
 // 先建立父子关系，再写到硬盘上
-int BPlusTree::subNodeUpdate(pTree tree, pNode parent, int insert, pNode child)
+int subNodeUpdate(pTree tree, pNode parent, int insert, pNode child)
 {
     sub(parent)[insert] = child->self;
     child->parent = parent->self;
@@ -572,7 +564,7 @@ int BPlusTree::subNodeUpdate(pTree tree, pNode parent, int insert, pNode child)
     return S_OK;
 }
 
-int BPlusTree::leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert)
+int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert)
 {
     memmove(&key(leaf)[insert + 1], &key(leaf)[insert], (leaf->count - insert) * sizeof(int));
     memmove(&data(leaf)[insert + 1], &data(leaf)[insert], (leaf->count - insert) * sizeof(ssize_t));
@@ -583,7 +575,7 @@ int BPlusTree::leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, i
     return S_OK;
 }
 
-int BPlusTree::leafSplitLeft(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
+int leafSplitLeft(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
 {
 
     int split = (leaf->count + 1) / 2;
@@ -606,7 +598,7 @@ int BPlusTree::leafSplitLeft(pTree tree, pNode leaf, pNode right, int key, ssize
 }
 
 // leafSplitRight(tree, node, sibling, key, data, insert);
-int BPlusTree::leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
+int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
 {
     // 要分裂的位置
     int split = (leaf->count + 1) / 2;
@@ -637,7 +629,7 @@ int BPlusTree::leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssiz
 }
 
 // 把左侧新new的节点融入这颗树
-int BPlusTree::leftNodeAdd(pTree tree, pNode node, pNode left)
+int leftNodeAdd(pTree tree, pNode node, pNode left)
 {
     append2Tree(tree, left);
     pNode prev = getNode(tree, node->prev);
@@ -659,7 +651,7 @@ int BPlusTree::leftNodeAdd(pTree tree, pNode node, pNode left)
     return S_OK;
 }
 
-int BPlusTree::rightNodeAdd(pTree tree, pNode node, pNode right)
+int rightNodeAdd(pTree tree, pNode node, pNode right)
 {
     append2Tree(tree, right);
     pNode next = getNode(tree, node->next);
@@ -681,12 +673,12 @@ int BPlusTree::rightNodeAdd(pTree tree, pNode node, pNode right)
     return S_OK;
 }
 
-int BPlusTree::isLeaf(pNode node)
+int isLeaf(pNode node)
 {
     return node->type == BPLUS_TREE_LEAF;
 }
 
-int BPlusTree::nodeFlush(pTree tree, pNode node)
+int nodeFlush(pTree tree, pNode node)
 {
     if (NULL != node)
     {
@@ -696,7 +688,7 @@ int BPlusTree::nodeFlush(pTree tree, pNode node)
     return S_OK;
 }
 
-int BPlusTree::freeCache(pTree tree, pNode node)
+int freeCache(pTree tree, pNode node)
 {
     char *buf = (char *)node;
     int i = (buf - tree->caches) / blockSize_;
@@ -705,7 +697,7 @@ int BPlusTree::freeCache(pTree tree, pNode node)
     return S_OK;
 }
 
-ssize_t BPlusTree::append2Tree(pTree tree, pNode node)
+ssize_t append2Tree(pTree tree, pNode node)
 {
     if (listEmpty(&tree->freeBlocks))
     {
@@ -721,13 +713,13 @@ ssize_t BPlusTree::append2Tree(pTree tree, pNode node)
     return node->self;
 }
 
-int BPlusTree::listEmpty(struct listHead *head)
+int listEmpty(struct listHead *head)
 {
     return head->next == head;
 }
 
 // 从硬盘中把数据读到内存
-pNode BPlusTree::getNode(pTree tree, ssize_t offset)
+pNode getNode(pTree tree, ssize_t offset)
 {
     if (offset == INVALID_OFFSET)
         return NULL;
@@ -743,21 +735,21 @@ pNode BPlusTree::getNode(pTree tree, ssize_t offset)
     }
 }
 
-pNode BPlusTree::newLeaf(pTree tree)
+pNode newLeaf(pTree tree)
 {
     pNode node = newNode(tree);
     node->type = BPLUS_TREE_LEAF;
     return node;
 }
 
-pNode BPlusTree::newNoLeaf(pTree tree)
+pNode newNoLeaf(pTree tree)
 {
     pNode node = newNode(tree);
     node->type = BPLUS_TREE_NO_LEAF;
     return node;
 }
 
-pNode BPlusTree::newNode(pTree tree)
+pNode newNode(pTree tree)
 {
     pNode node = getCache(tree);
     node->self = INVALID_OFFSET;
@@ -768,7 +760,7 @@ pNode BPlusTree::newNode(pTree tree)
     return node;
 }
 
-pNode BPlusTree::getCache(pTree tree)
+pNode getCache(pTree tree)
 {
     for (int i = 0; i < MIN_CACHE_NUM; i++)
     {
@@ -782,7 +774,7 @@ pNode BPlusTree::getCache(pTree tree)
 }
 
 // 搜索部分
-ssize_t BPlusTree::search(pTree tree, int key)
+ssize_t search(pTree tree, int key)
 {
     pNode node = getNode(tree, tree->root);
     while (node != NULL)
@@ -811,7 +803,7 @@ ssize_t BPlusTree::search(pTree tree, int key)
 // 应该返回的值是以0开始的
 // 如果找到的话返回找到的位置
 // 如果未找到的话返回应该插入的位置
-int BPlusTree::keyBinarySearch(pNode node, int target)
+int keyBinarySearch(pNode node, int target)
 {
     int *arr = key(node);
     int len = node->count;
