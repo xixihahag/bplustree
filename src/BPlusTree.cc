@@ -10,27 +10,44 @@
 int setConfig(pConfig config)
 {
     // 从屏幕中读
-    printf("filename:(default /tmp/pbtree)");
+    memset(config->fileName, 0, sizeof(config->fileName));
+    printf("filename:(default /tmp/bptree)");
+
     char i;
     switch (i = getchar())
     {
     case '\n':
-        strcpy(config->fileName, "/tmp/pbtree");
+        strcpy(config->fileName, "/tmp/bptree");
         break;
     default:
         ungetc(i, stdin);
         fscanf(stdin, "%s", config->fileName);
+        getchar();
     }
 
-    printf("blocksize:");
-    switch (i = getchar())
+    bool flag = false;
+    while (!flag)
     {
-    case '\n':
-        config->blockSize = 4096;
-        break;
-    default:
-        ungetc(i, stdin);
-        fscanf(stdin, "%d", config->blockSize);
+        printf("blocksize:(default 4096)");
+        switch (i = getchar())
+        {
+        case '\n':
+            // config->blockSize = 4096;
+            // TODO: 最后改回去
+            config->blockSize = 76;
+            flag = true;
+            break;
+        default:
+            ungetc(i, stdin);
+            fscanf(stdin, "%d", &config->blockSize);
+            getchar();
+            if (config->blockSize >= 76)
+                flag = true;
+            else
+            {
+                printf("blocksize too small\n");
+            }
+        }
     }
 
     return S_OK;
@@ -38,13 +55,23 @@ int setConfig(pConfig config)
 
 int initTree(pTree tree, char *fileName, int blockSize)
 {
+    printf("initTree\n");
+
     blockSize_ = blockSize;
     // 这两个暂时设置成一样的，默认存的是数字
-    maxOrder_ = (blockSize - sizeof(bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
-    maxEntries_ = (blockSize - sizeof(bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
+    // 指的都是data/subchild的个数
+    maxOrder_ = (blockSize - sizeof(struct bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
+    maxEntries_ = (blockSize - sizeof(struct bPlusNode)) / (sizeof(int) + sizeof(ssize_t));
 
-    // tree->fileName = fileName;
-    memcpy(tree->fileName, fileName, strlen(fileName));
+    // printf("bPlusNode = %d\n", sizeof(struct bPlusNode));
+    // printf("sum size = %d\n", sizeof(struct bPlusNode) + 3 * (sizeof(int) + sizeof( ssize_t)));
+    // printf("maxOrder_ = %d\n", maxOrder_);
+    // printf("maxEntries_ = %d\n", maxEntries_);
+
+    memset(tree->fileName, 0, sizeof(tree->fileName));
+
+    strcpy(tree->fileName, fileName);
+
     tree->root = INVALID_OFFSET; // 初始化根节点
     // 初始化缓冲区
     tree->caches = (char *)malloc(blockSize * MIN_CACHE_NUM);
@@ -52,20 +79,33 @@ int initTree(pTree tree, char *fileName, int blockSize)
     tree->freeBlocks.prev = &tree->freeBlocks;
     tree->freeBlocks.next = &tree->freeBlocks;
 
-    // 从文件读命令 进行建树
-    int fd = open(strcat(tree->fileName, ".build"), O_RDWR, 0644);
-    if (fd > 0)
+    tree->fileSize = 0;
+
+    // TODO: O_DIRECT 读写操作的传输数据大小和缓冲区地址都需要按照一定的规则对齐
+    // https://www.cnblogs.com/ziziwu/p/4126244.html
+    // tree->fd = open(tree->fileName, O_CREAT | O_RDWR | O_TRUNC | O_DIRECT | O_SYNC, 0644);
+
+    tree->fd = open(tree->fileName, O_CREAT | O_RDWR | O_TRUNC, 0644);
+
+    // FIXME:
+    // FILE *file = fopen(strcat(tree->fileName, ".build"), "r");
+    FILE *file = fopen("//tmp//bptree.build", "r");
+    if (file != NULL)
     {
-        tree->fd = fd;
-        ssize_t key;
-        // FIXME:  这里输入格式有点问题
-        // 删除部分
-        // while (fscanf(fd, "%d", &data) != EOF)
-        // {
-        //     insert(tree, key, data);
-        //     deleteNode(tree, key);
-        // }
+        int key;
+        ssize_t data;
+        while (fscanf(file, "%d %lu", &key, &data) != EOF)
+        {
+            insert(tree, key, data);
+            // deleteNode(tree, key);
+        }
     }
+    else
+    {
+        printf("file not exist\n");
+    }
+
+    // printf("insert end\n");
 
     return S_OK;
 }
@@ -85,12 +125,12 @@ int deleteNode(pTree tree, int key)
             int i = keyBinarySearch(node, key);
             if (i >= 0)
             {
-                node = getNode(tree, sub(node)[i + 1]);
+                node = getNode(tree, *subi(node, i + 1));
             }
             else
             {
                 i *= -1;
-                node = getNode(tree, sub(node)[i]);
+                node = getNode(tree, *subi(node, i));
             }
         }
     }
@@ -127,20 +167,20 @@ int leafRemove(pTree tree, pNode node, int key)
         if (findSiblingNode(tree, node))
         {
             // 借一个节点过来-处理双亲节点-结束
-            int preKey = key(node)[0];
+            int preKey = *keyi(node, 0);
             int newKey;
 
             // 右移 空出第一个位置
-            memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
-            memmove(&data(node)[1], &data(node)[0], node->count * sizeof(ssize_t));
+            memmove(keyi(node, 1), keyi(node, 0), node->count * sizeof(int));
+            memmove(datai(node, 1), datai(node, 0), node->count * sizeof(ssize_t));
 
             // 把兄弟节点的关键字拿过来
             pNode sibling = getNode(tree, node->prev);
-            memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
-            memmove(&data(node)[0], &data(sibling)[sibling->count - 1], sizeof(ssize_t));
+            memmove(keyi(node, 0), keyi(sibling, sibling->count - 1), sizeof(int));
+            memmove(datai(node, 0), datai(sibling, sibling->count - 1), sizeof(ssize_t));
 
             // 处理双亲节点的问题
-            newKey = key(node)[0];
+            newKey = *keyi(node, 0);
             noLeafReplace(tree, node->parent, preKey, newKey);
 
             // 数据写回硬盘
@@ -150,12 +190,12 @@ int leafRemove(pTree tree, pNode node, int key)
         else
         {
             // 与兄弟节点合并-处理双亲节点-视情况结束
-            int preK = key(node)[0];
+            int preK = *keyi(node, 0);
             pNode sibling = getNode(tree, node->prev);
 
             // 合并到兄弟节点
-            memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
-            memmove(&data(sibling)[sibling->count], &data(node)[0], node->count * sizeof(ssize_t));
+            memmove(keyi(sibling, sibling->count), keyi(node, 0), node->count * sizeof(int));
+            memmove(datai(sibling, sibling->count), datai(node, 0), node->count * sizeof(ssize_t));
 
             nodeDelete(tree, node, NULL, NULL);
 
@@ -179,7 +219,7 @@ int leafRemove(pTree tree, pNode node, int key)
 //     {
 //         if (node->count == 2)
 //         {
-//             pNode root = getNode(tree, sub(node)[0]);
+//             pNode root = getNode(tree,tiInt(node,0));
 //             root->parent = INVALID_OFFSET;
 //             tree->root = root->self;
 //             tree->level--;
@@ -198,19 +238,19 @@ int leafRemove(pTree tree, pNode node, int key)
 //         if (findSiblingNode(getNode(tree,node->prev))
 //         {
 //             // 向兄弟节点借关键字-解决父母节点的问题
-//             int preK = key(node)[0];
+//             int preK = keyi(node,0);
 //             int newK;
 
-//             memmove(&key(node)[1], &key(node)[0], node->count * sizeof(int));
-//             memmove(&sub(node)[1], &sub(node)[0], node->count * sizeof(ssize_t));
+//             memmove(&keyi(node,1), &keyi(node,0), node->count * sizeof(int));
+//             memmove(&subi(node,1), &subi(node,0), node->count * sizeof( ssize_t));
 
 //             // FIXME: 两次get同一个node 会不会出问题
 //             pNode sibling = getNode(tree, node->prev);
-//             memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(int));
-//             memmove(&key(node)[0], &key(sibling)[sibling->count - 1], sizeof(ssize_t));
+//             memmove(&keyi(node,0), &key(sibling)[sibling->count - 1], sizeof(int));
+//             memmove(&keyi(node,0), &key(sibling)[sibling->count - 1], sizeof( ssize_t));
 
 //             // TODO: 处理父母节点的问题
-//             newK = key(node)[0];
+//             newK = keyi(node,0);
 //             noLeafReplace(tree, node->parent, preK, newK);
 
 //             nodeFlush(tree, node);
@@ -230,11 +270,11 @@ int leafRemove(pTree tree, pNode node, int key)
 //             pNode parent = getNode(tree, node->parent);
 
 //             // 把父母节点的关键字拉下来
-//             memmove(&key(sibling)[sibling->count - 1], &key(parent)[posi], sizeof(int));
+//             memmove(&key(sibling)[sibling->count - 1], &keyi(parent,posi), sizeof(int));
 
 //             // 合并兄弟节点
-//             memmove(&key(sibling)[sibling->count], &key(node)[0], node->count * sizeof(int));
-//             memmove(&sub(sibling)[sibling->count], &sub(node)[0], node->count * sizeof(int));
+//             memmove(&key(sibling)[sibling->count], &keyi(node,0), node->count * sizeof(int));
+//             memmove(&sub(sibling)[sibling->count], &subi(node,0), node->count * sizeof(int));
 
 //             // 维护双亲节点
 //             noLeafRemove(tree, parent, posi);
@@ -249,8 +289,8 @@ int leafRemove(pTree tree, pNode node, int key)
 
 int noLeafSimpleRemove(pTree tree, pNode node, int pos)
 {
-    memmove(&key(node)[pos], &key(node)[pos + 1], (node->count - pos - 2) * sizeof(int));
-    memmove(&sub(node)[pos], &sub(node)[pos + 1], (node->count - pos - 1) * sizeof(ssize_t));
+    memmove(keyi(node, pos), keyi(node, pos + 1), (node->count - pos - 2) * sizeof(int));
+    memmove(subi(node, pos), subi(node, pos + 1), (node->count - pos - 1) * sizeof(ssize_t));
     node->count--;
 
     return S_OK;
@@ -263,7 +303,7 @@ int noLeafReplace(pTree tree, ssize_t parent, int preK, int newK)
     if (pos < 0)
         return S_FALSE;
 
-    key(node)[pos] = newK;
+    *keyi(node, pos) = newK;
 
     nodeFlush(tree, node);
     freeCache(tree, node);
@@ -287,8 +327,8 @@ int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch)
 
 // int  leafSimpleRemove(pTree tree, pNode node, int pos)
 // {
-//     memmove(&key(node)[remove], &key(node)[remove + 1], (node->count - pos - 1) * sizeof(int));
-//     memmove(&data(node)[remove], &data(node)[remove + 1], (node->count - pos - 1) * sizeof(ssize_t));
+//     memmove(&keyi(node,remove), &keyi(node,remove+1), (node->count - pos - 1) * sizeof(int));
+//     memmove(&datai(node,remove), &datai(node,remove+1), (node->count - pos - 1) * sizeof( ssize_t));
 //     node->count--;
 
 //     return S_OK;
@@ -297,6 +337,8 @@ int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch)
 // TODO: 插入主逻辑
 int insert(pTree tree, int key, ssize_t data)
 {
+    printf("insert\n");
+
     pNode node = getNode(tree, tree->root);
     pNode oldNode;
     while (NULL != node)
@@ -311,33 +353,39 @@ int insert(pTree tree, int key, ssize_t data)
             oldNode = node;
             if (i >= 0)
             {
-                node = getNode(tree, sub(node)[i + 1]);
+                node = getNode(tree, *subi(node, i + 1));
             }
             else
             {
                 i += 1;
                 i *= -1;
-                node = getNode(tree, sub(node)[i]);
+                node = getNode(tree, *subi(node, i));
             }
         }
         freeCache(tree, oldNode);
     }
+    // printf("new node\n");
 
     // 新节点加入
     pNode root = newLeaf(tree);
-    key(root)[0] = key;
-    data(root)[0] = data;
+
+    *keyi(root, 0) = key;
+    *datai(root, 0) = data;
+
     root->count = 1;
     tree->root = append2Tree(tree, root);
     tree->level = 1;
 
     // 写入到硬盘
     nodeFlush(tree, root);
+
+    // printf("insert end\n");
     return S_OK;
 }
 
 int leafInsert(pTree tree, pNode node, int key, ssize_t data)
 {
+    printf("leafinsert\n");
     int insert = keyBinarySearch(node, key);
 
     // 限制插入重复节点
@@ -352,7 +400,7 @@ int leafInsert(pTree tree, pNode node, int key, ssize_t data)
     int splitKey;
 
     // 分裂新节点
-    if (node->count == maxEntries_)
+    if ((node->count) == maxEntries_)
     {
         // 从这个点分裂成两个
         int split = (maxEntries_ + 1) / 2;
@@ -366,8 +414,13 @@ int leafInsert(pTree tree, pNode node, int key, ssize_t data)
         }
         else
         {
+            // printf("key = %d\n", key);
             splitKey = leafSplitRight(tree, node, sibling, key, data, insert);
         }
+
+        // showNode(node);
+        // showNode(sibling);
+        // printf("0000\n");
 
         return buildParentNode(tree, node, sibling, splitKey);
     }
@@ -381,15 +434,21 @@ int leafInsert(pTree tree, pNode node, int key, ssize_t data)
 
 int buildParentNode(pTree tree, pNode left, pNode right, int key)
 {
+    printf("buildParentNode\n");
+
     // 左面和右面新加节点的情况统一在一起了 所以要单独判断左右的节点是否有parent
     if (left->parent == INVALID_OFFSET && right->parent == INVALID_OFFSET)
     {
         pNode parent = newNoLeaf(tree);
-        key(parent)[0] = key;
+        *keyi(parent, 0) = key;
 
         // 与子节点相关联
-        sub(parent)[0] = left->self;
-        sub(parent)[1] = right->self;
+
+        // printf("left->self = %lu\n", left->self);
+        // printf("right->self = %lu\n", right->self);
+
+        *subi(parent, 0) = left->self;
+        *subi(parent, 1) = right->self;
         parent->count = 2;
 
         // tree->root 永远指向最高的节点
@@ -400,21 +459,33 @@ int buildParentNode(pTree tree, pNode left, pNode right, int key)
         tree->level++;
 
         // 把节点写到磁盘
+        nodeFlush(tree, parent);
         nodeFlush(tree, left);
         nodeFlush(tree, right);
-        nodeFlush(tree, parent);
+
+        // printf("tree->root = %lu\n", tree->root);
+        // showNode(getNode(tree, tree->root));
+        // printf("***\n");
+        // printf("parent->self = %lu\n", parent->self);
+        // showNode(parent);
+        // showNode(left);
+        // showNode(right);
 
         return S_OK;
     }
-    else if (right->parent == INVALID_OFFSET)
+    else if (right->parent == INVALID_OFFSET && left->parent != INVALID_OFFSET)
     {
+        // printf("key = %d\n", key);
         return noLeafInsert(tree, getNode(tree, left->parent), left, right, key);
     }
 }
 
 int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
+    printf("noLeafInsert\n");
+
     int insert = keyBinarySearch(node, key);
+
     insert += 1;
     insert *= -1;
 
@@ -441,6 +512,10 @@ int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
     {
         noLeafSimpleInsert(tree, node, left, right, key, insert);
         nodeFlush(tree, node);
+
+        // printf("offset = %d\n", *subi(node, 2));
+        // showNode(getNode(tree, *subi(node, 2)));
+        // printf("end\n");
     }
 
     return S_OK;
@@ -448,46 +523,68 @@ int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 
 int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
+    printf("noLeafSplitRight\n");
     rightNodeAdd(tree, node, right);
     // int splitKey = key(node)[split - 1];
 
     // int pivot = 0;
+    int splitKey = *keyi(node, split - 1);
     node->count = split;
-    right->count = maxOrder_ - split;
+    // maxOrder_ - (split - 1) - 1
+    right->count = maxOrder_ - split + 1;
 
-    memmove(&key(right)[0], &key(node)[split], (right->count) * sizeof(int));
-    memmove(&sub(node)[1], &key(node)[split + 1], (right->count) * sizeof(ssize_t));
+    *keyi(right, 0) = key;
+    subNodeUpdate(tree, right, 0, lch);
+    subNodeUpdate(tree, right, 1, rch);
 
-    subNodeUpdate(tree, node, 0, rch);
+    memmove(keyi(right, 1), keyi(node, split), (right->count - 1) * sizeof(int));
+    memmove(subi(right, 2), subi(node, split + 1), (right->count - 1) * sizeof(ssize_t));
 
-    for (int i = 1; i < right->count; i++)
+    for (int i = 2; i < right->count; i++)
     {
         subNodeFlush(tree, right, i);
     }
 
-    nodeFlush(tree, lch);
+    // --
 
-    return key;
+    // memmove(keyi(right, 0), keyi(node, split), (right->count - 1) * sizeof(int));
+    // memmove(subi(right, 0), subi(node, split), (right->count - 1) * sizeof(ssize_t));
+
+    // subNodeUpdate(tree, node, 1, rch);
+
+    // for (int i = 0; i < right->count; i++)
+    // {
+    //     if (i != 1)
+    //         subNodeFlush(tree, right, i);
+    // }
+
+    // nodeFlush(tree, lch);
+
+    return splitKey;
 }
 
 int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
+    printf("noLeafSplitRight1\n");
     // int split = (maxOrder_ + 1) / 2;
     rightNodeAdd(tree, node, right);
-    int splitKey = key(node)[split];
+    int splitKey = *keyi(node, split);
     int insert = keyBinarySearch(node, key);
+
+    insert += 1;
+    insert *= -1;
 
     int pivot = insert - split - 1;
     node->count = split;
     right->count = maxOrder_ - split;
 
-    memmove(&key(right)[0], &key(node)[split + 1], pivot * sizeof(int));
-    memmove(&sub(right)[0], &sub(node)[split + 1], (pivot + 1) * sizeof(ssize_t));
+    memmove(keyi(right, 0), keyi(node, split + 1), pivot * sizeof(int));
+    memmove(subi(right, 0), subi(node, split + 1), (pivot + 1) * sizeof(ssize_t));
 
-    key(right)[pivot] = key;
+    *keyi(right, pivot) = key;
 
-    memmove(&key(right)[pivot + 1], &key(node)[insert], (maxOrder_ - insert - 1) * sizeof(int));
-    memmove(&sub(right)[pivot + 2], &sub(node)[insert + 1], (maxOrder_ - insert - 1) * sizeof(ssize_t));
+    memmove(keyi(right, pivot + 1), keyi(node, insert), (maxOrder_ - insert - 1) * sizeof(int));
+    memmove(subi(right, pivot + 2), subi(node, insert + 1), (maxOrder_ - insert - 1) * sizeof(ssize_t));
 
     subNodeUpdate(tree, right, pivot + 1, right);
 
@@ -504,6 +601,7 @@ int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch,
 
 int subNodeFlush(pTree tree, pNode parent, ssize_t offset)
 {
+    printf("subNodeFlush\n");
     pNode subNode = getNode(tree, offset);
     subNode->parent = parent->self;
     nodeFlush(tree, subNode);
@@ -513,26 +611,27 @@ int subNodeFlush(pTree tree, pNode parent, ssize_t offset)
 
 int noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
+    printf("noLeafSplitLeft\n");
     rightNodeAdd(tree, node, right);
 
     int insert = keyBinarySearch(node, key);
-    int splitKey = key(node)[split - 1];
+    int splitKey = *keyi(node, split - 1);
     node->count = split;
     right->count = maxOrder_ - split;
 
-    memmove(&key(right)[0], &key(node)[split], (right->count) * sizeof(int));
-    memmove(&sub(right)[0], &sub(node)[split], ((right->count) + 1) * sizeof(ssize_t));
+    memmove(keyi(right, 0), keyi(node, split), (right->count) * sizeof(int));
+    memmove(subi(right, 0), subi(node, split), ((right->count) + 1) * sizeof(ssize_t));
 
-    memmove(&key(node)[insert + 1], &key(node)[insert], (split - insert - 1) * sizeof(int));
-    memmove(&sub(node)[insert + 2], &sub(node)[insert + 1], (split - insert - 1) * sizeof(ssize_t));
+    memmove(keyi(node, insert + 1), keyi(node, insert), (split - insert - 1) * sizeof(int));
+    memmove(subi(node, insert + 2), subi(node, insert + 1), (split - insert - 1) * sizeof(ssize_t));
 
-    key(node)[insert] = key;
+    *keyi(node, insert) = key;
     subNodeUpdate(tree, node, insert + 1, rch);
 
     //更新子节点
     for (int i = 0; i < right->count; i++)
     {
-        subNodeFlush(tree, right, sub(right)[i]);
+        subNodeFlush(tree, right, *subi(right, i));
     }
 
     nodeFlush(tree, lch);
@@ -542,12 +641,15 @@ int noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, pNode rch, i
 
 int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert)
 {
-    memmove(&key(node)[insert + 1], &key(node)[insert], (node->count - insert - 1) * sizeof(int));
-    key(node)[insert] = key;
+    printf("noLeafSimpleInsert\n");
+    memmove(keyi(node, insert + 1), keyi(node, insert), (node->count - insert) * sizeof(int));
+    memmove(subi(node, insert + 2), subi(node, insert + 1), (node->count - insert) * sizeof(ssize_t));
 
-    memmove(&data(node)[insert + 2], &data(node)[insert + 1], (node->count - insert - 1) * sizeof(ssize_t));
-    subNodeUpdate(tree, node, insert, left);
+    *keyi(node, insert) = key;
     subNodeUpdate(tree, node, insert + 1, right);
+    nodeFlush(tree, left);
+
+    // showNode(getNode(tree,tiInt(node,2)));
 
     node->count++;
 
@@ -557,19 +659,22 @@ int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key,
 // 先建立父子关系，再写到硬盘上
 int subNodeUpdate(pTree tree, pNode parent, int insert, pNode child)
 {
-    sub(parent)[insert] = child->self;
+    printf("subNodeUpdate\n");
+    *subi(parent, insert) = child->self;
     child->parent = parent->self;
     nodeFlush(tree, child);
 
     return S_OK;
 }
 
+// pass
 int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert)
 {
-    memmove(&key(leaf)[insert + 1], &key(leaf)[insert], (leaf->count - insert) * sizeof(int));
-    memmove(&data(leaf)[insert + 1], &data(leaf)[insert], (leaf->count - insert) * sizeof(ssize_t));
-    key(leaf)[insert] = key;
-    data(leaf)[insert] = data;
+    printf("leafSimpleInsert\n");
+    memmove(keyi(leaf, insert + 1), keyi(leaf, insert), (leaf->count - insert) * sizeof(int));
+    memmove(datai(leaf, insert + 1), datai(leaf, insert), (leaf->count - insert) * sizeof(ssize_t));
+    *keyi(leaf, insert) = key;
+    *datai(leaf, insert) = data;
     leaf->count++;
 
     return S_OK;
@@ -577,7 +682,7 @@ int leafSimpleInsert(pTree tree, pNode leaf, int key, ssize_t data, int insert)
 
 int leafSplitLeft(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
 {
-
+    printf("leafSplitLeft\n");
     int split = (leaf->count + 1) / 2;
     rightNodeAdd(tree, leaf, right);
 
@@ -585,21 +690,22 @@ int leafSplitLeft(pTree tree, pNode leaf, pNode right, int key, ssize_t data, in
     leaf->count = split;
     right->count = maxEntries_ - split + 1;
 
-    memmove(&key(right)[0], &key(leaf)[split - 1], (right->count) * sizeof(int));
-    memmove(&data(right)[0], &data(leaf)[split - 1], (right->count) * sizeof(ssize_t));
+    memmove(keyi(right, 0), keyi(leaf, split - 1), (right->count) * sizeof(int));
+    memmove(datai(right, 0), datai(leaf, split - 1), (right->count) * sizeof(ssize_t));
 
-    memmove(&key(leaf)[pivot + 1], &key(leaf)[pivot], (split - pivot - 1) * sizeof(int));
-    memmove(&data(leaf)[pivot + 1], &data(leaf)[pivot], (split - pivot - 1) * sizeof(ssize_t));
+    memmove(keyi(leaf, pivot + 1), keyi(leaf, pivot), (split - pivot - 1) * sizeof(int));
+    memmove(datai(leaf, pivot + 1), datai(leaf, pivot), (split - pivot - 1) * sizeof(ssize_t));
 
-    key(leaf)[pivot] = key;
-    data(leaf)[pivot] = data;
+    *keyi(leaf, pivot) = key;
+    *datai(leaf, pivot) = data;
 
-    return key(right)[0];
+    return *keyi(right, 0);
 }
 
 // leafSplitRight(tree, node, sibling, key, data, insert);
 int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, int insert)
 {
+    printf("leafSplitRight\n");
     // 要分裂的位置
     int split = (leaf->count + 1) / 2;
 
@@ -613,24 +719,25 @@ int leafSplitRight(pTree tree, pNode leaf, pNode right, int key, ssize_t data, i
     right->count = maxEntries_ - split + 1;
 
     // 放数据过去
-    memmove(&key(right)[0], &key(leaf)[split], pivot * sizeof(int));
-    memmove(&data(right)[0], &data(leaf)[split], pivot * sizeof(ssize_t));
+    memmove(keyi(right, 0), keyi(leaf, split), pivot * sizeof(int));
+    memmove(datai(right, 0), datai(leaf, split), pivot * sizeof(ssize_t));
 
     // 把新数据加上去
-    key(right)[pivot] = key;
-    data(right)[pivot] = data;
+    *keyi(right, pivot) = key;
+    *datai(right, pivot) = data;
 
     // 如果插入的值在中间的话 需要把右面的值也加上去
-    memmove(&key(right)[pivot + 1], &key(leaf)[insert], (maxEntries_ - insert) * sizeof(int));
-    memmove(&data(right)[pivot + 1], &data(leaf)[insert], (maxEntries_ - insert) * sizeof(ssize_t));
+    memmove(keyi(right, pivot + 1), keyi(leaf, insert), (maxEntries_ - insert) * sizeof(int));
+    memmove(datai(right, pivot + 1), datai(leaf, insert), (maxEntries_ - insert) * sizeof(ssize_t));
 
     // 返回的是新加入的节点key的首地址
-    return key(right)[0];
+    return *keyi(right, 0);
 }
 
 // 把左侧新new的节点融入这颗树
 int leftNodeAdd(pTree tree, pNode node, pNode left)
 {
+    printf("leftNodeAdd\n");
     append2Tree(tree, left);
     pNode prev = getNode(tree, node->prev);
     if (NULL != prev)
@@ -653,6 +760,7 @@ int leftNodeAdd(pTree tree, pNode node, pNode left)
 
 int rightNodeAdd(pTree tree, pNode node, pNode right)
 {
+    printf("rightNodeAdd\n");
     append2Tree(tree, right);
     pNode next = getNode(tree, node->next);
 
@@ -675,7 +783,8 @@ int rightNodeAdd(pTree tree, pNode node, pNode right)
 
 int isLeaf(pNode node)
 {
-    return node->type == BPLUS_TREE_LEAF;
+    // printf("isLeaf\n");
+    return (node->type == BPLUS_TREE_LEAF);
 }
 
 int nodeFlush(pTree tree, pNode node)
@@ -690,9 +799,10 @@ int nodeFlush(pTree tree, pNode node)
 
 int freeCache(pTree tree, pNode node)
 {
+    // printf("freeCache\n");
     char *buf = (char *)node;
     int i = (buf - tree->caches) / blockSize_;
-    tree->used[i] = 0;
+    tree->used[i] = false;
 
     return S_OK;
 }
@@ -701,6 +811,7 @@ ssize_t append2Tree(pTree tree, pNode node)
 {
     if (listEmpty(&tree->freeBlocks))
     {
+        printf("append2Tree\n");
         node->self = tree->fileSize;
         tree->fileSize += blockSize_;
     }
@@ -721,6 +832,7 @@ int listEmpty(struct listHead *head)
 // 从硬盘中把数据读到内存
 pNode getNode(pTree tree, ssize_t offset)
 {
+    // printf("getNode\n");
     if (offset == INVALID_OFFSET)
         return NULL;
 
@@ -728,11 +840,18 @@ pNode getNode(pTree tree, ssize_t offset)
     {
         if (!tree->used[i])
         {
+
+            tree->used[i] = true;
             char *buf = tree->caches + blockSize_ * i;
             pread(tree->fd, buf, blockSize_, offset);
+
+            // printf("offset =  %lu\n", ((pNode)buf)->self);
             return (pNode)buf;
         }
     }
+
+    printf("find no buf\n");
+    return NULL;
 }
 
 pNode newLeaf(pTree tree)
@@ -782,18 +901,18 @@ ssize_t search(pTree tree, int key)
         int i = keyBinarySearch(node, key);
         if (isLeaf(node))
         {
-            return (i > 0 ? data(node)[i] : -1);
+            return (i > 0 ? *datai(node, i) : -1);
         }
         else
         {
             if (i >= 0)
             {
-                node = getNode(tree, sub(node)[i + 1]);
+                node = getNode(tree, *subi(node, i + 1));
             }
             else
             {
                 i *= -1;
-                node = getNode(tree, sub(node)[i]);
+                node = getNode(tree, *subi(node, i));
             }
         }
     }
@@ -805,8 +924,17 @@ ssize_t search(pTree tree, int key)
 // 如果未找到的话返回应该插入的位置
 int keyBinarySearch(pNode node, int target)
 {
-    int *arr = key(node);
-    int len = node->count;
+    // printf("keyBinarySearch\n");
+    int *arr = keyi(node, 0);
+    int len;
+    if (isLeaf(node))
+    {
+        len = node->count;
+    }
+    else
+    {
+        len = node->count - 1;
+    }
 
     int low = 0;
     int high = len - 1;
@@ -831,4 +959,160 @@ int keyBinarySearch(pNode node, int target)
     }
 
     return -low - 1;
+}
+
+void show(pTree tree)
+{
+    // printf("show\n");
+
+    if (tree->root == INVALID_OFFSET)
+    {
+        printf("tree empty\n");
+        return;
+    }
+
+    // printf("noleaf: offset = %d ", tree->root);
+    // pNode tnode = getNode(tree, tree->root);
+    // showNode(tnode);
+
+    // printf("\nleaf: offset = %d ", *subi(tnode, 0));
+    // showNode(getNode(tree, *subi(tnode, 0)));
+    // freeCache(tree, tnode);
+
+    // printf("\nleaf: offset = %d ", *subi(tnode, 1));
+    // showNode(getNode(tree, *subi(tnode, 1)));
+    // freeCache(tree, tnode);
+
+    // printf("\nleaf: offset = %d ", *subi(tnode, 2));
+    // showNode(getNode(tree, *subi(tnode, 2)));
+    // freeCache(tree, tnode);
+
+    // printf("****\n");
+
+    // pNode node;
+    //  ssize_t offset;
+    // for (int i = 0; i <= 3; i++)
+    // {
+    //     offset = blockSize_ * i;
+    //     node = getNode(tree, offset);
+    //     showNode(node);
+    //     freeCache(tree, node);
+    //     printf("\n");
+    // }
+
+    // --
+
+    std::queue<ssize_t> q;
+    q.push(tree->root);
+
+    int len, curCount = 1, nexCount = 0;
+    ssize_t t;
+    pNode node;
+    while (!q.empty())
+    {
+        t = q.front();
+        q.pop();
+
+        node = getNode(tree, t);
+        if (NULL == node)
+        {
+            printf("node == null\n");
+        }
+
+        if (isLeaf(node))
+        {
+            printf("Leaf: offset = %lu\n", t);
+            len = node->count;
+        }
+        else
+        {
+            printf("noLeaf: offset = %lu\n", t);
+            len = node->count - 1;
+
+            // 把子女节点加入到queue中
+            if (!isLeaf(node))
+            {
+                for (int i = 0; i < node->count; i++)
+                {
+                    // printf("i = %d, offset = %lu\n", i, *subi(node, i));
+
+                    q.push(*subi(node, i));
+                }
+            }
+
+            nexCount += node->count;
+        }
+
+        // 打印node节点中的key
+        for (int i = 0; i < len; i++)
+        {
+            printf("i = %d, key = %d\n", i, *keyi(node, i));
+        }
+
+        freeCache(tree, node);
+
+        if ((--curCount) == 0)
+        {
+            printf("\n");
+            curCount = nexCount;
+            nexCount = 0;
+        }
+    }
+}
+
+void showNode(pNode node)
+{
+    // printf("showNode\n");
+
+    int len;
+    if (isLeaf(node))
+    {
+        // printf("***\n");
+        len = node->count;
+    }
+    else
+    {
+        len = node->count - 1;
+    }
+
+    printf("len = %d\n", len);
+    for (int i = 0; i < len; i++)
+    {
+        printf("i = %d,key = %d\n", i, *keyi(node, i));
+    }
+}
+
+char *offsetPtr(pNode node)
+{
+    return ((char *)(node) + sizeof(struct bPlusNode));
+}
+
+char *sub(pNode node)
+{
+    return (offsetPtr(node) + (maxOrder_ - 1) * sizeof(int));
+}
+
+ssize_t *subi(pNode node, int i)
+{
+    return (ssize_t *)(sub(node) + i * sizeof(ssize_t));
+}
+
+char *key(pNode node)
+{
+    return offsetPtr(node);
+}
+
+int *keyi(pNode node, int i)
+{
+    return (int *)(key(node) + i * sizeof(int));
+}
+
+char *data(pNode node)
+{
+    return (offsetPtr(node) + maxEntries_ * sizeof(int));
+}
+
+ssize_t *datai(pNode node, int i)
+{
+    return (ssize_t *)(data(node) + i * sizeof(int));
 }

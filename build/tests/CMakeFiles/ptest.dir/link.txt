@@ -1,0 +1,1 @@
+/usr/bin/c++   -g   CMakeFiles/ptest.dir/main.cc.o  -o ptest -rdynamic ../src/libbptree.a 

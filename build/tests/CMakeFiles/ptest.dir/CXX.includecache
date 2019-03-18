@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/BPlusTree.h
+sys/types.h
+-
+stdlib.h
+-
+cstring
+-
+cstdio
+-
+fcntl.h
+-
+unistd.h
+-
+queue
+-
+
+/media/sf_shareVirtualBox/bplustree/bplustree/tests/main.cc
+sys/types.h
+-
+sys/stat.h
+-
+fcntl.h
+-
+malloc.h
+-
+BPlusTree.h
+/media/sf_shareVirtualBox/bplustree/bplustree/tests/BPlusTree.h
+

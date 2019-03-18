@@ -1,0 +1,8 @@
+/media/sf_shareVirtualBox/bplustree/bplustree/build/CMakeFiles/rebuild_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/CMakeFiles/edit_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/src/CMakeFiles/rebuild_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/src/CMakeFiles/edit_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/src/CMakeFiles/bptree.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/tests/CMakeFiles/rebuild_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/tests/CMakeFiles/edit_cache.dir
+/media/sf_shareVirtualBox/bplustree/bplustree/build/tests/CMakeFiles/ptest.dir
