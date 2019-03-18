@@ -483,6 +483,7 @@ int buildParentNode(pTree tree, pNode left, pNode right, int key)
 int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
 {
     printf("noLeafInsert\n");
+    // printf("key = %d\n", key);
 
     int insert = keyBinarySearch(node, key);
 
@@ -494,11 +495,12 @@ int noLeafInsert(pTree tree, pNode node, pNode left, pNode right, int key)
         int splitKey;
         int split = (node->count + 1) / 2;
         pNode sibling = newNoLeaf(tree);
-        if (insert < split)
+        int relativeSplit = split - 1;
+        if (insert < relativeSplit)
         {
             splitKey = noLeafSplitLeft(tree, node, sibling, left, right, key, split);
         }
-        else if (insert == split)
+        else if (insert == relativeSplit)
         {
             splitKey = noLeafSplitRight(tree, node, sibling, left, right, key, split);
         }
@@ -525,9 +527,30 @@ int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, 
 {
     printf("noLeafSplitRight\n");
     rightNodeAdd(tree, node, right);
-    // int splitKey = key(node)[split - 1];
 
-    // int pivot = 0;
+    node->count = split;
+    // maxOrder_ - (split - 1) - 1
+    right->count = maxOrder_ - split + 1;
+
+    memmove(keyi(right, 0), keyi(node, split - 1), (right->count - 1) * sizeof(int));
+    memmove(subi(right, 1), subi(node, split), (right->count - 1) * sizeof(int));
+
+    subNodeUpdate(tree, right, 0, rch);
+    nodeFlush(tree, lch);
+
+    for (int i = 1; i < right->count; i++)
+    {
+        subNodeFlush(tree, right, i);
+    }
+
+    return key;
+}
+
+int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
+{
+    printf("noLeafSplitRight1\n");
+    rightNodeAdd(tree, node, right);
+
     int splitKey = *keyi(node, split - 1);
     node->count = split;
     // maxOrder_ - (split - 1) - 1
@@ -545,57 +568,6 @@ int noLeafSplitRight(pTree tree, pNode node, pNode right, pNode lch, pNode rch, 
         subNodeFlush(tree, right, i);
     }
 
-    // --
-
-    // memmove(keyi(right, 0), keyi(node, split), (right->count - 1) * sizeof(int));
-    // memmove(subi(right, 0), subi(node, split), (right->count - 1) * sizeof(ssize_t));
-
-    // subNodeUpdate(tree, node, 1, rch);
-
-    // for (int i = 0; i < right->count; i++)
-    // {
-    //     if (i != 1)
-    //         subNodeFlush(tree, right, i);
-    // }
-
-    // nodeFlush(tree, lch);
-
-    return splitKey;
-}
-
-int noLeafSplitRight1(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
-{
-    printf("noLeafSplitRight1\n");
-    // int split = (maxOrder_ + 1) / 2;
-    rightNodeAdd(tree, node, right);
-    int splitKey = *keyi(node, split);
-    int insert = keyBinarySearch(node, key);
-
-    insert += 1;
-    insert *= -1;
-
-    int pivot = insert - split - 1;
-    node->count = split;
-    right->count = maxOrder_ - split;
-
-    memmove(keyi(right, 0), keyi(node, split + 1), pivot * sizeof(int));
-    memmove(subi(right, 0), subi(node, split + 1), (pivot + 1) * sizeof(ssize_t));
-
-    *keyi(right, pivot) = key;
-
-    memmove(keyi(right, pivot + 1), keyi(node, insert), (maxOrder_ - insert - 1) * sizeof(int));
-    memmove(subi(right, pivot + 2), subi(node, insert + 1), (maxOrder_ - insert - 1) * sizeof(ssize_t));
-
-    subNodeUpdate(tree, right, pivot + 1, right);
-
-    for (int i = 0; i < right->count; i++)
-    {
-        if (i != (pivot + 1))
-            subNodeFlush(tree, right, i);
-    }
-
-    nodeFlush(tree, lch);
-
     return splitKey;
 }
 
@@ -612,31 +584,57 @@ int subNodeFlush(pTree tree, pNode parent, ssize_t offset)
 int noLeafSplitLeft(pTree tree, pNode node, pNode right, pNode lch, pNode rch, int key, int split)
 {
     printf("noLeafSplitLeft\n");
+
     rightNodeAdd(tree, node, right);
 
     int insert = keyBinarySearch(node, key);
-    int splitKey = *keyi(node, split - 1);
+    insert += 1;
+    insert *= -1;
+
+    // printf("insert = %d\n", insert);
+
+    int splitKey = *keyi(node, split - 2);
+
     node->count = split;
-    right->count = maxOrder_ - split;
+    right->count = maxOrder_ - split + 1;
 
-    memmove(keyi(right, 0), keyi(node, split), (right->count) * sizeof(int));
-    memmove(subi(right, 0), subi(node, split), ((right->count) + 1) * sizeof(ssize_t));
+    // 先搞定右边的
+    memmove(keyi(right, 0), keyi(node, split - 1), (right->count - 1) * sizeof(int));
+    memmove(subi(right, 0), subi(node, split - 1), right->count * sizeof(ssize_t));
 
-    memmove(keyi(node, insert + 1), keyi(node, insert), (split - insert - 1) * sizeof(int));
-    memmove(subi(node, insert + 2), subi(node, insert + 1), (split - insert - 1) * sizeof(ssize_t));
+    for (int i = 0; i < right->count; i++)
+    {
+        subNodeFlush(tree, right, i);
+    }
+
+    // 再移左面的部分
+    memmove(keyi(node, insert + 1), keyi(node, insert), (node->count - insert - 2) * sizeof(int));
+    memmove(subi(node, insert + 2), keyi(node, insert + 1), (node->count - insert - 2) * sizeof(ssize_t));
 
     *keyi(node, insert) = key;
     subNodeUpdate(tree, node, insert + 1, rch);
 
-    //更新子节点
-    for (int i = 0; i < right->count; i++)
-    {
-        subNodeFlush(tree, right, *subi(right, i));
-    }
-
     nodeFlush(tree, lch);
 
     return splitKey;
+
+    // --
+
+    // memmove(keyi(node, insert + 1), keyi(node, insert), (split - insert - 1) * sizeof(int));
+    // memmove(subi(node, insert + 2), subi(node, insert + 1), (split - insert - 1) * sizeof(ssize_t));
+
+    // *keyi(node, insert) = key;
+    // subNodeUpdate(tree, node, insert + 1, rch);
+
+    // //更新子节点
+    // for (int i = 0; i < right->count; i++)
+    // {
+    //     subNodeFlush(tree, right, *subi(right, i));
+    // }
+
+    // nodeFlush(tree, lch);
+
+    // return splitKey;
 }
 
 int noLeafSimpleInsert(pTree tree, pNode node, pNode left, pNode right, int key, int insert)
