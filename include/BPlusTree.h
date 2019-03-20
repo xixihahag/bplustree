@@ -88,7 +88,6 @@ ssize_t *datai(pNode node, int i);
 // 函数声明
 int setConfig(pConfig config);
 int initTree(pTree tree, char *fileName, int blockSize);
-int deleteNode(pTree tree, int key);
 int insert(pTree tree, int key, ssize_t data);
 int leafInsert(pTree tree, pNode node, int key, ssize_t data);
 int buildParentNode(pTree tree, pNode left, pNode right, int key);
@@ -118,13 +117,15 @@ ssize_t search(pTree tree, int key);
 int keyBinarySearch(pNode node, int target);
 
 // 删除
+int deleteNode(pTree tree, int key);
 int nodeDelete(pTree tree, pNode node, pNode lch, pNode rch);
-//   int leafSimpleRemove(pTree tree, pNode node, int pos);
+int leafSimpleRemove(pTree tree, pNode node, int pos);
 int leafRemove(pTree tree, pNode node, int key);
+noLeafBorrowRight(pTree tree, pNode left, pNode right);
+noLeafBorrowLeft(pTree tree, pNode left, pNode right);
 
-//   int noLeafRemove(pTree tree, pNode node, int key);
+int noLeafRemove(pTree tree, pNode node, int key);
 int noLeafSimpleRemove(pTree tree, pNode node, int pos);
-bool findSiblingNode(pTree tree, pNode node);
 int noLeafReplace(pTree tree, ssize_t node, int preK, int newK);
 
 // 展示
